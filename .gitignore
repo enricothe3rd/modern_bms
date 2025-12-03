@@ -1,0 +1,21 @@
+# Node modules
+/node_modules
+
+# Build / cache
+/public/build
+/public/hot
+/public/storage
+
+# Environment files
+.env
+.env.*.backup
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# PHP / vendor
+/vendor
