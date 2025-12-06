@@ -6,20 +6,25 @@ use App\Models\Department;
 use App\Models\ExpenseType;
 use App\Models\Account;
 use App\Models\SubAccount;
-use App\Models\DepartmentExpenseTypeAllocation;
+use App\Http\Requests\DepartmentExpenseTypeAllocationRequest;
+use App\Services\DepartmentExpenseTypeAllocationService;
 use Illuminate\Http\Request;
 
 class DepartmentExpenseTypeAllocationController extends Controller
 {
+    protected $service;
+
+    public function __construct(DepartmentExpenseTypeAllocationService $service)
+    {
+        $this->service = $service;
+    }
+
     public function index($departmentId, $expenseTypeId)
     {
         $department = Department::with('sector')->findOrFail($departmentId);
         $expenseType = ExpenseType::findOrFail($expenseTypeId);
         
-        $allocations = DepartmentExpenseTypeAllocation::with(['account', 'subAccount'])
-            ->where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->get();
+        $allocations = $this->service->getAllocations($departmentId, $expenseTypeId);
 
         // Load accounts with their sub-accounts for hierarchical display
         $accounts = Account::with('subAccounts')->orderBy('code')->get();
@@ -34,67 +39,18 @@ class DepartmentExpenseTypeAllocationController extends Controller
         ));
     }
 
-    public function store(Request $request, $departmentId, $expenseTypeId)
+    public function store(DepartmentExpenseTypeAllocationRequest $request, $departmentId, $expenseTypeId)
     {
-        // Clean the amount by removing commas before validation
-        $request->merge([
-            'amount' => str_replace(',', '', $request->input('amount', ''))
-        ]);
+        try {
+            $this->service->createAllocation($departmentId, $expenseTypeId, $request->validated());
 
-        $validatedData = $request->validate([
-            'account_type' => 'required|in:account,sub_account',
-            'account_id' => 'required_if:account_type,account|nullable|exists:accounts,id',
-            'sub_account_id' => 'required_if:account_type,sub_account|nullable|exists:sub_accounts,id',
-            'amount' => 'required|numeric|min:0',
-            'description' => 'nullable|string|max:255'
-        ]);
-
-        $department = Department::findOrFail($departmentId);
-        $expenseType = ExpenseType::findOrFail($expenseTypeId);
-
-        // Additional validation: Prevent allocation to accounts with sub-accounts
-        if ($validatedData['account_type'] === 'account' && $validatedData['account_id']) {
-            $account = Account::findOrFail($validatedData['account_id']);
-            if (!$account->canBeAllocatedTo()) {
-                return redirect()->back()
-                    ->with('error', 'Cannot allocate to this account because it has sub-accounts. Please select one of its sub-accounts instead.')
-                    ->withInput();
-            }
-        }
-
-        // Additional validation: Verify sub-account belongs to a valid parent account
-        if ($validatedData['account_type'] === 'sub_account' && $validatedData['sub_account_id']) {
-            $subAccount = SubAccount::with('account')->findOrFail($validatedData['sub_account_id']);
-            if (!$subAccount->account) {
-                return redirect()->back()
-                    ->with('error', 'Selected sub-account does not have a valid parent account.');
-            }
-        }
-
-        // Check for duplicate allocation
-        $existingAllocation = DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->where('account_id', $validatedData['account_type'] === 'account' ? $validatedData['account_id'] : null)
-            ->where('sub_account_id', $validatedData['account_type'] === 'sub_account' ? $validatedData['sub_account_id'] : null)
-            ->first();
-
-        if ($existingAllocation) {
+            return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
+                ->with('success', 'Budget allocation added successfully!');
+        } catch (\Exception $e) {
             return redirect()->back()
-                ->with('error', 'An allocation for this account already exists. Please edit the existing allocation instead.');
+                ->with('error', $e->getMessage())
+                ->withInput();
         }
-
-        // Create new allocation
-        DepartmentExpenseTypeAllocation::create([
-            'department_id' => $departmentId,
-            'expense_type_id' => $expenseTypeId,
-            'account_id' => $validatedData['account_type'] === 'account' ? $validatedData['account_id'] : null,
-            'sub_account_id' => $validatedData['account_type'] === 'sub_account' ? $validatedData['sub_account_id'] : null,
-            'amount' => $validatedData['amount'],
-            'description' => $validatedData['description'] ?? null
-        ]);
-
-        return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
-            ->with('success', 'Budget allocation added successfully!');
     }
 
     public function edit($departmentId, $expenseTypeId, $allocationId)
@@ -116,70 +72,31 @@ class DepartmentExpenseTypeAllocationController extends Controller
         ]);
     }
 
-    public function update(Request $request, $departmentId, $expenseTypeId, $allocationId)
+    public function update(DepartmentExpenseTypeAllocationRequest $request, $departmentId, $expenseTypeId, $allocationId)
     {
-        // Clean the amount by removing commas before validation
-        $request->merge([
-            'amount' => str_replace(',', '', $request->input('amount', ''))
-        ]);
+        try {
+            $this->service->updateAllocation($departmentId, $expenseTypeId, $allocationId, $request->validated());
 
-        $validatedData = $request->validate([
-            'account_type' => 'required|in:account,sub_account',
-            'account_id' => 'required_if:account_type,account|nullable|exists:accounts,id',
-            'sub_account_id' => 'required_if:account_type,sub_account|nullable|exists:sub_accounts,id',
-            'amount' => 'required|numeric|min:0',
-            'description' => 'nullable|string|max:255'
-        ]);
-
-        $allocation = DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->findOrFail($allocationId);
-
-        // Additional validation: Prevent allocation to accounts with sub-accounts
-        if ($validatedData['account_type'] === 'account' && $validatedData['account_id']) {
-            $account = Account::findOrFail($validatedData['account_id']);
-            if (!$account->canBeAllocatedTo()) {
-                return redirect()->back()
-                    ->with('error', 'Cannot allocate to this account because it has sub-accounts. Please select one of its sub-accounts instead.')
-                    ->withInput();
-            }
-        }
-
-        // Check for duplicate allocation (excluding current allocation)
-        $existingAllocation = DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->where('account_id', $validatedData['account_type'] === 'account' ? $validatedData['account_id'] : null)
-            ->where('sub_account_id', $validatedData['account_type'] === 'sub_account' ? $validatedData['sub_account_id'] : null)
-            ->where('id', '!=', $allocationId)
-            ->first();
-
-        if ($existingAllocation) {
+            return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
+                ->with('success', 'Budget allocation updated successfully!');
+        } catch (\Exception $e) {
             return redirect()->back()
-                ->with('error', 'An allocation for this account already exists.');
+                ->with('error', $e->getMessage())
+                ->withInput();
         }
-
-        // Update allocation
-        $allocation->update([
-            'account_id' => $validatedData['account_type'] === 'account' ? $validatedData['account_id'] : null,
-            'sub_account_id' => $validatedData['account_type'] === 'sub_account' ? $validatedData['sub_account_id'] : null,
-            'amount' => $validatedData['amount'],
-            'description' => $validatedData['description'] ?? null
-        ]);
-
-        return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
-            ->with('success', 'Budget allocation updated successfully!');
     }
 
     public function destroy($departmentId, $expenseTypeId, $allocationId)
     {
-        $allocation = DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->findOrFail($allocationId);
-        
-        $allocation->delete();
+        try {
+            $this->service->deleteAllocation($allocationId);
 
-        return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
-            ->with('success', 'Allocation removed successfully!');
+            return redirect()->route('department-expense-type-allocations.index', [$departmentId, $expenseTypeId])
+                ->with('success', 'Allocation removed successfully!');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', $e->getMessage());
+        }
     }
 
     public function getAccountSubAccounts($accountId)

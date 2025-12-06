@@ -42,10 +42,25 @@
 
 <div class="bg-white shadow-xl rounded-2xl p-6 ring-1 ring-gray-900/5">
     <div class="flex items-center justify-between mb-6">
-        <h3 class="text-xl font-bold text-gray-900">Budget Allocations</h3>
+        <div class="flex items-center gap-4">
+            <h3 class="text-xl font-bold text-gray-900">Budget Allocations</h3>
+            <div>
+                <label for="yearFilter" class="text-sm font-medium text-gray-700 mr-2">Year:</label>
+                <select id="yearFilter" class="border border-gray-300 rounded-lg px-3 py-1 text-sm">
+                    <option value="">All Years</option>
+                    @php
+                        $currentYear = date('Y');
+                        $startYear = 2020;
+                    @endphp
+                    @for($year = $currentYear + 1; $year >= $startYear; $year--)
+                        <option value="{{ $year }}" {{ $year == $currentYear ? 'selected' : '' }}>{{ $year }}</option>
+                    @endfor
+                </select>
+            </div>
+        </div>
         @if($allocations->count() > 0)
             <div class="text-right">
-                <div class="text-2xl font-bold text-green-600">₱{{ number_format($allocations->sum('amount'), 2) }}</div>
+                <div class="text-2xl font-bold text-green-600" id="totalAmount">₱{{ number_format($allocations->sum('amount'), 2) }}</div>
                 <div class="text-sm text-gray-500">Total Allocated</div>
             </div>
         @endif
@@ -56,7 +71,8 @@
         <table id="allocationTable" class="min-w-full divide-y divide-gray-200">
             <thead class="bg-indigo-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Account Type</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Year</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Account Type</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Account</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Description</th>
                     <th class="px-6 py-3 text-right text-xs font-semibold text-indigo-700 uppercase tracking-wider">Amount</th>
@@ -65,7 +81,12 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-100">
                 @foreach($allocations as $allocation)
-                    <tr class="hover:bg-gray-50 transition duration-150 ease-in-out">
+                    <tr class="hover:bg-gray-50 transition duration-150 ease-in-out" data-year="{{ $allocation->year }}">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-sm font-semibold bg-gray-100 text-gray-800">
+                                {{ $allocation->year }}
+                            </span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {{ $allocation->account_type === 'account' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }} uppercase">
                                 {{ $allocation->account_type === 'account' ? 'Account' : 'Sub Account' }}
@@ -95,6 +116,7 @@
                                 {{-- Edit Button with Icon --}}
                                 <button class="editBtn text-yellow-500 hover:text-yellow-600 p-1 rounded-full hover:bg-yellow-50 transition duration-150 ease-in-out"
                                     data-id="{{ $allocation->id }}"
+                                    data-year="{{ $allocation->year }}"
                                     data-account-type="{{ $allocation->account_type }}"
                                     data-account-id="{{ $allocation->account_id }}"
                                     data-sub-account-id="{{ $allocation->sub_account_id }}"
@@ -127,7 +149,7 @@
 @push('scripts')
 <script>
 $(document).ready(function() {
-    $('#allocationTable').DataTable({
+    const table = $('#allocationTable').DataTable({
         // Define the custom layout with improved flex for alignment and spacing
         dom: "<'flex flex-col sm:flex-row justify-between items-center mb-4 gap-4'<'buttons'B><'search-wrapper'f>>" +
              "rt" + // Table
@@ -158,9 +180,51 @@ $(document).ready(function() {
             }
         },
 
-        // Order by account type by default
-        order: [[0, 'asc']]
+        // Order by year desc, then account type
+        order: [[0, 'desc']]
     });
+
+    // Function to update total amount based on visible rows
+    function updateTotalAmount() {
+        let total = 0;
+        table.rows({ search: 'applied' }).every(function() {
+            const row = this.node();
+            const amountText = $(row).find('td:eq(4)').text().replace(/[₱,]/g, '');
+            const amount = parseFloat(amountText) || 0;
+            total += amount;
+        });
+        
+        $('#totalAmount').text('₱' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    }
+
+    // Custom search function for year filtering
+    $.fn.dataTable.ext.search.push(
+        function(settings, data, dataIndex) {
+            const selectedYear = $('#yearFilter').val();
+            
+            // If no year selected, show all
+            if (!selectedYear) {
+                return true;
+            }
+            
+            // Get the year from the row's data attribute
+            const row = table.row(dataIndex).node();
+            const rowYear = $(row).data('year');
+            
+            // Compare years
+            return rowYear == selectedYear;
+        }
+    );
+
+    // Year filter functionality
+    $('#yearFilter').on('change', function() {
+        table.draw();
+        updateTotalAmount();
+    });
+
+    // Apply initial filter after DataTables is fully initialized
+    table.draw();
+    updateTotalAmount();
 
     // Style the search input, info, and pagination elements for a modern look
 
@@ -200,6 +264,21 @@ $(document).ready(function() {
 
             <!-- Single Allocation Form -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- Year -->
+                <div>
+                    <x-input-label value="Year" />
+                    <select name="year" id="yearInput" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        @php
+                            $currentYear = date('Y');
+                            $startYear = 2020;
+                        @endphp
+                        @for($year = $currentYear + 1; $year >= $startYear; $year--)
+                            <option value="{{ $year }}" {{ $year == $currentYear ? 'selected' : '' }}>{{ $year }}</option>
+                        @endfor
+                    </select>
+                    <x-input-error :messages="$errors->get('year')" class="mt-1" />
+                </div>
+
                 <!-- Account/Sub-Account Selection -->
                 <div>
                     <x-input-label value="Account / Sub Account" />
@@ -447,9 +526,13 @@ $(document).ready(function() {
             formElement.action = `/departments/{{ $department->id }}/expense-types/{{ $expenseType->id }}/allocations/${button.dataset.id}`;
 
             // Populate form with data attributes
+            const year = button.dataset.year;
             const accountType = button.dataset.accountType;
             const accountId = button.dataset.accountId;
             const subAccountId = button.dataset.subAccountId;
+            
+            // Set year
+            document.getElementById('yearInput').value = year;
             
             // Set the dropdown value based on account type
             if (accountType === 'account' && accountId) {

@@ -8,30 +8,31 @@ class ClaimantPayeeRepository
 {
     public function all()
     {
-        return ClaimantPayee::with(['department', 'payeeCategory'])->orderBy('name')->get();
+        return ClaimantPayee::with(['department', 'payeeCategory'])
+            ->orderBy('name')
+            ->get();
     }
 
     public function find($id)
     {
-        return ClaimantPayee::with(['department', 'payeeCategory'])->findOrFail($id);
+        return ClaimantPayee::findOrFail($id);
     }
 
     public function create(array $data)
     {
-        $claimantPayee = ClaimantPayee::create($data);
-        return $claimantPayee->load(['department', 'payeeCategory']);
+        return ClaimantPayee::create($data);
     }
 
     public function update($id, array $data)
     {
-        $claimantPayee = ClaimantPayee::findOrFail($id);
+        $claimantPayee = $this->find($id);
         $claimantPayee->update($data);
-        return $claimantPayee->load(['department', 'payeeCategory']);
+        return $claimantPayee;
     }
 
     public function delete($id)
     {
-        $claimantPayee = ClaimantPayee::findOrFail($id);
+        $claimantPayee = $this->find($id);
         return $claimantPayee->delete();
     }
 }

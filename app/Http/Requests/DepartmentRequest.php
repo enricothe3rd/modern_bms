@@ -26,6 +26,7 @@ class DepartmentRequest extends FormRequest
             'code' => 'required|string|unique:departments,code' . ($id ? ',' . $id : ''),
             'name' => 'required|string',
             'sector_id' => 'required|exists:sectors,id',
+            'fund_type_id' => 'required|exists:fund_types,id',
         ];
     }
 }

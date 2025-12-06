@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Services\DepartmentService;
 use App\Services\SectorService;
+use App\Repositories\FundTypeRepository;
 use App\Http\Resources\DepartmentResource;
 use App\Http\Requests\DepartmentRequest;
 
@@ -12,23 +13,26 @@ class DepartmentController extends Controller
 {
     protected $service;
     protected $sectorService;
+    protected $fundTypeRepo;
 
-    public function __construct(DepartmentService $service, SectorService $sectorService)
+    public function __construct(DepartmentService $service, SectorService $sectorService, FundTypeRepository $fundTypeRepo)
     {
         $this->service = $service;
         $this->sectorService = $sectorService;
+        $this->fundTypeRepo = $fundTypeRepo;
     }
 
     public function index(Request $request)
     {
         $departments = $this->service->getAllDepartments();
         $sectors = $this->sectorService->getAllSectors();
+        $fundTypes = $this->fundTypeRepo->all();
 
         if ($request->wantsJson()) {
             return DepartmentResource::collection($departments);
         }
 
-        return view('departments.index', compact('departments', 'sectors'));
+        return view('departments.index', compact('departments', 'sectors', 'fundTypes'));
     }
 
     public function store(DepartmentRequest $request)
@@ -49,8 +53,9 @@ class DepartmentController extends Controller
         $department = $this->service->findDepartment($id);
         $departments = $this->service->getAllDepartments();
         $sectors = $this->sectorService->getAllSectors();
+        $fundTypes = $this->fundTypeRepo->all();
 
-        return view('departments.index', compact('departments', 'sectors', 'department'));
+        return view('departments.index', compact('departments', 'sectors', 'fundTypes', 'department'));
     }
 
     public function update(DepartmentRequest $request, $id)

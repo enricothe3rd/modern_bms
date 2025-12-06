@@ -14,6 +14,8 @@ use App\Http\Controllers\FormSignatoryController;
 use App\Http\Controllers\UserDepartmentAssignmentController;
 use App\Http\Controllers\ManagementController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ObligationRequestController;
+use App\Http\Controllers\Api\ObligationRequestApiController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -25,9 +27,16 @@ Route::get('/reports', function () {
     return view('reports');
 })->name('reports');
 
-Route::get('/obligation_requests', function () {
-    return view('obligation_requests.index');
-})->name('obligationRequests');
+// Obligation Requests
+Route::resource('obligation-requests', ObligationRequestController::class)->except(['create'])->middleware('auth');
+
+// API routes for cascading dropdowns
+Route::prefix('api/obligation-requests')->middleware('auth')->group(function () {
+    Route::get('fund-types/{fundType}/departments', [ObligationRequestApiController::class, 'getDepartmentsByFundType']);
+    Route::get('fund-types/{fundType}/departments/{department}/expense-types', [ObligationRequestApiController::class, 'getExpenseTypesByDepartment']);
+    Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts', [ObligationRequestApiController::class, 'getAccountsByExpenseType']);
+    Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts/{account}/sub-accounts', [ObligationRequestApiController::class, 'getSubAccountsByAccount']);
+});
 
 Route::get('/setUp', function () {
     return view('setUp.index');

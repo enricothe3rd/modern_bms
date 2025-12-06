@@ -31,6 +31,7 @@
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Code</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Name</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Sector</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Fund Type</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider">Users</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider">Expense Types</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tr-lg">Actions</th>
@@ -50,6 +51,15 @@
                                 <span class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                                     No Sector
                                 </span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                            @if($dep->fundType)
+                                <span class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    {{ $dep->fundType->description }}
+                                </span>
+                            @else
+                                <span class="text-gray-400">-</span>
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-700">
@@ -87,6 +97,7 @@
                                     data-code="{{ $dep->code }}"
                                     data-name="{{ $dep->name }}"
                                     data-sector-id="{{ $dep->sector_id ?? '' }}"
+                                    data-fund-type-id="{{ $dep->fund_type_id ?? '' }}"
                                     title="Edit">
                                     {{-- Replace 'Edit' text with a pencil icon. Assuming you have a standard icon library like Heroicons/Font Awesome --}}
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -217,6 +228,20 @@ $(document).ready(function() {
                 <x-input-error :messages="$errors->get('sector_id')" class="mt-1" />
             </div>
 
+            <!-- Fund Type Row -->
+            <div class="mb-4">
+                <x-input-label value="Fund Type" />
+                <select name="fund_type_id" id="fundTypeInput" class="mt-1 block w-full border border-neutral-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" required>
+                    <option value="">Select Fund Type</option>
+                    @foreach($fundTypes as $fundType)
+                        <option value="{{ $fundType->id }}" {{ old('fund_type_id', $department->fund_type_id ?? '') == $fundType->id ? 'selected' : '' }}>
+                            {{ $fundType->description }}
+                        </option>
+                    @endforeach
+                </select>
+                <x-input-error :messages="$errors->get('fund_type_id')" class="mt-1" />
+            </div>
+
             <!-- Buttons -->
             <div class="flex justify-end space-x-2">
                 <button type="button" id="cancelBtn" class="px-6 py-3 rounded-lg border border-gray-300">Cancel</button>
@@ -247,6 +272,7 @@ $(document).ready(function() {
     const codeInput = document.getElementById('codeInput');
     const nameInput = document.getElementById('nameInput');
     const sectorInput = document.getElementById('sectorInput');
+    const fundTypeInput = document.getElementById('fundTypeInput');
 
     // Show modal for Add
     addBtn.addEventListener('click', () => {
@@ -258,6 +284,7 @@ $(document).ready(function() {
         codeInput.value = '';
         nameInput.value = '';
         sectorInput.value = '';
+        fundTypeInput.value = '';
 
         // Remove old PUT method if exists
         const putMethod = formElement.querySelector('input[name="_method"]');
@@ -279,6 +306,7 @@ $(document).ready(function() {
             codeInput.value = button.dataset.code;
             nameInput.value = button.dataset.name;
             sectorInput.value = button.dataset.sectorId;
+            fundTypeInput.value = button.dataset.fundTypeId || '';
 
             // Add PUT method if not already
             if (!formElement.querySelector('input[name="_method"]')) {

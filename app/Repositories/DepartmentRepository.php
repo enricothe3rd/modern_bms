@@ -9,7 +9,7 @@ class DepartmentRepository
     public function all()
     {
         return Department::withCount(['users', 'expenseTypes'])
-            ->with('sector')
+            ->with(['sector', 'fundType'])
             ->orderBy('name')
             ->get();
     }

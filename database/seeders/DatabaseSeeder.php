@@ -27,6 +27,9 @@ class DatabaseSeeder extends Seeder
         // Seed users with roles and departments
         $this->call(UserSeeder::class);
 
+        // Seed payee categories
+        $this->call(PayeeCategorySeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([

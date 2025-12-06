@@ -12,6 +12,7 @@ class DepartmentExpenseTypeAllocation extends Model
     protected $fillable = [
         'department_id',
         'expense_type_id',
+        'year',
         'account_id',
         'sub_account_id',
         'amount',

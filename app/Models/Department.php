@@ -9,11 +9,16 @@ class Department extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['code', 'name', 'sector_id'];
+    protected $fillable = ['code', 'name', 'sector_id', 'fund_type_id'];
 
     public function sector()
     {
         return $this->belongsTo(Sector::class);
+    }
+
+    public function fundType()
+    {
+        return $this->belongsTo(FundType::class);
     }
 
     public function users()

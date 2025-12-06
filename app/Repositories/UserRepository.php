@@ -6,6 +6,11 @@ use App\Models\User;
 
 class UserRepository
 {
+    public function all()
+    {
+        return User::orderBy('name')->get();
+    }
+
     public function allWithRole()
     {
         return User::with(['role', 'department'])->latest()->get();

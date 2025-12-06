@@ -23,6 +23,11 @@ return [
             ],
         ],
         [
+            'label' => 'Obligation Requests',
+            'icon' => 'document-text',
+            'route' => 'obligation-requests.index',
+        ],
+        [
             'label' => 'Management',
             'icon' => 'cog-6-tooth',
             'route' => 'management.index',

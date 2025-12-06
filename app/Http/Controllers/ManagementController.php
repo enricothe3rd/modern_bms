@@ -119,6 +119,24 @@ class ManagementController extends Controller
                 'color' => 'amber',
                 'count' => \App\Models\RolePermission::count(),
                 'permission' => 'manage_role_permissions'
+            ],
+            [
+                'label' => 'Payee Categories',
+                'description' => 'Manage claimant payee categories and classifications',
+                'icon' => 'tag',
+                'route' => 'payee-categories.index',
+                'color' => 'lime',
+                'count' => \App\Models\PayeeCategory::count(),
+                'permission' => 'manage_payees'
+            ],
+            [
+                'label' => 'Claimant Payees',
+                'description' => 'Manage claimant payees and their information',
+                'icon' => 'user-circle',
+                'route' => 'claimant-payees.index',
+                'color' => 'sky',
+                'count' => \App\Models\ClaimantPayee::count(),
+                'permission' => 'manage_payees'
             ]
         ];
 
