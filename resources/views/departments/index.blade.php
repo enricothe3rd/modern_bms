@@ -31,6 +31,8 @@
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Code</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Name</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Sector</th>
+                    <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider">Users</th>
+                    <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider">Expense Types</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tr-lg">Actions</th>
                 </tr>
             </thead>
@@ -40,18 +42,51 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $dep->code }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $dep->name }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            <span class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                {{ $dep->sector_name }}
-                            </span>
+                            @if($dep->sector)
+                                <span class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    {{ $dep->sector->name }}
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                                    No Sector
+                                </span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-700">
+                            @if($dep->users_count > 0)
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    {{ $dep->users_count }} {{ Str::plural('user', $dep->users_count) }}
+                                </span>
+                            @else
+                                <span class="text-gray-400">-</span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-700">
+                            @if($dep->expense_types_count > 0)
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    {{ $dep->expense_types_count }} {{ Str::plural('type', $dep->expense_types_count) }}
+                                </span>
+                            @else
+                                <span class="text-gray-400">-</span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                             <div class="flex justify-center items-center gap-2">
+                                {{-- Assign Expense Types Button --}}
+                                <a href="{{ route('department-expense-types.index', $dep->id) }}" 
+                                   class="text-blue-600 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50 transition duration-150 ease-in-out"
+                                   title="Assign Expense Types">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                    </svg>
+                                </a>
+
                                 {{-- Edit Button with Icon --}}
                                 <button class="editBtn text-yellow-500 hover:text-yellow-600 p-1 rounded-full hover:bg-yellow-50 transition duration-150 ease-in-out"
                                     data-id="{{ $dep->id }}"
                                     data-code="{{ $dep->code }}"
                                     data-name="{{ $dep->name }}"
-                                    data-sector="{{ $dep->sector_name }}"
+                                    data-sector-id="{{ $dep->sector_id ?? '' }}"
                                     title="Edit">
                                     {{-- Replace 'Edit' text with a pencil icon. Assuming you have a standard icon library like Heroicons/Font Awesome --}}
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -142,7 +177,7 @@ $(document).ready(function() {
 
 <!-- Modal Overlay -->
 <div id="departmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 relative">
 
         <!-- Close Button -->
         <button id="closeModal" class="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-xl">&times;</button>
@@ -171,13 +206,15 @@ $(document).ready(function() {
             <!-- Sector Row -->
             <div class="mb-4">
                 <x-input-label value="Sector" />
-                <select name="sector_name" id="sectorInput" class="mt-1 block w-full border border-neutral-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                <select name="sector_id" id="sectorInput" class="mt-1 block w-full border border-neutral-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                     <option value="">Select Sector</option>
-                    <option value="Sector A">Sector A</option>
-                    <option value="Sector B">Sector B</option>
-                    <option value="Sector C">Sector C</option>
+                    @foreach($sectors as $sector)
+                        <option value="{{ $sector->id }}" {{ old('sector_id', $department->sector_id ?? '') == $sector->id ? 'selected' : '' }}>
+                            {{ $sector->name }}
+                        </option>
+                    @endforeach
                 </select>
-                <x-input-error :messages="$errors->get('sector_name')" class="mt-1" />
+                <x-input-error :messages="$errors->get('sector_id')" class="mt-1" />
             </div>
 
             <!-- Buttons -->
@@ -241,7 +278,7 @@ $(document).ready(function() {
 
             codeInput.value = button.dataset.code;
             nameInput.value = button.dataset.name;
-            sectorInput.value = button.dataset.sector;
+            sectorInput.value = button.dataset.sectorId;
 
             // Add PUT method if not already
             if (!formElement.querySelector('input[name="_method"]')) {

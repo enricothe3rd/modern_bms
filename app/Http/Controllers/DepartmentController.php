@@ -4,31 +4,36 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Services\DepartmentService;
+use App\Services\SectorService;
 use App\Http\Resources\DepartmentResource;
 use App\Http\Requests\DepartmentRequest;
 
 class DepartmentController extends Controller
 {
     protected $service;
+    protected $sectorService;
 
-    public function __construct(DepartmentService $service)
+    public function __construct(DepartmentService $service, SectorService $sectorService)
     {
         $this->service = $service;
+        $this->sectorService = $sectorService;
     }
 
     public function index(Request $request)
     {
         $departments = $this->service->getAllDepartments();
+        $sectors = $this->sectorService->getAllSectors();
 
         if ($request->wantsJson()) {
             return DepartmentResource::collection($departments);
         }
 
-        return view('departments.index', compact('departments'));
+        return view('departments.index', compact('departments', 'sectors'));
     }
 
     public function store(DepartmentRequest $request)
     {
+
         $department = $this->service->createDepartment($request->validated());
 
         if ($request->wantsJson()) {
@@ -43,8 +48,9 @@ class DepartmentController extends Controller
     {
         $department = $this->service->findDepartment($id);
         $departments = $this->service->getAllDepartments();
+        $sectors = $this->sectorService->getAllSectors();
 
-        return view('departments.index', compact('departments', 'department'));
+        return view('departments.index', compact('departments', 'sectors', 'department'));
     }
 
     public function update(DepartmentRequest $request, $id)

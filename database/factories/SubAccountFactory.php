@@ -1,0 +1,25 @@
+<?php
+
+namespace Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\SubAccount>
+ */
+class SubAccountFactory extends Factory
+{
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        return [
+            'code' => $this->faker->unique()->numerify('####'),
+            'description' => $this->faker->words(3, true),
+            'account_id' => \App\Models\Account::factory()
+        ];
+    }
+}

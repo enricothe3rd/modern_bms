@@ -3,24 +3,29 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 
 class DepartmentRequest extends FormRequest
 {
-    // Allow all users (or implement your auth logic)
     public function authorize(): bool
     {
         return true;
     }
 
+    protected function prepareForValidation()
+    {
+        // Log the incoming request data before validation
+        Log::info('DepartmentRequest data received', $this->all());
+    }
+
     public function rules(): array
     {
-        // Get department ID for update
-        $id = $this->route('department'); // automatically gets the {department} route param
+        $id = $this->route('department'); // automatically gets {department} route param
 
         return [
             'code' => 'required|string|unique:departments,code' . ($id ? ',' . $id : ''),
             'name' => 'required|string',
-            'sector_name' => 'required|string',
+            'sector_id' => 'required|exists:sectors,id',
         ];
     }
 }

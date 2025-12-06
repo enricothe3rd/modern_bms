@@ -8,7 +8,10 @@ class DepartmentRepository
 {
     public function all()
     {
-        return Department::latest()->get();
+        return Department::withCount(['users', 'expenseTypes'])
+            ->with('sector')
+            ->orderBy('name')
+            ->get();
     }
 
     public function find($id)

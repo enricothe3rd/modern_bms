@@ -20,14 +20,16 @@
     <link rel="stylesheet" href="{{ asset('vendor/datatables/datatables.min.css') }}">
     <link rel="stylesheet" href="{{ asset('vendor/datatables/buttons.dataTables.min.css') }}">
 </head>
-<body class="font-sans antialiased">
-    <div class="min-h-screen bg-gray-100 dark:bg-gray-900 flex">
+<body class="font-sans antialiased bg-gray-50">
+    <div class="min-h-screen flex">
         <!-- Sidebar -->
         <x-sidebar />
 
         <!-- Main Content -->
-        <main class="flex-1 p-6 overflow-auto">
-            {{ $slot }}
+        <main class="flex-1 overflow-auto">
+            <div class="p-6">
+                {{ $slot }}
+            </div>
         </main>
     </div>
 
@@ -46,6 +48,9 @@
     <!-- Required for PDF export -->
     <script src="{{ asset('vendor/pdfmake/pdfmake.min.js') }}"></script>
     <script src="{{ asset('vendor/pdfmake/vfs_fonts.js') }}"></script>
+
+    <!-- Delete Confirmation Script -->
+    <script src="{{ asset('js/delete-confirmation.js') }}"></script>
 
     <!-- DataTable Initialization -->
     @stack('scripts')

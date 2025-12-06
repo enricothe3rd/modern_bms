@@ -5,12 +5,12 @@ return [
     'links' => [
         [
             'label' => 'Dashboard',
-            'icon' => 'icons/24/outline/academic-cap.svg',
+            'icon' => 'home',
             'route' => 'dashboard',
         ],
         [
             'label' => 'Reports',
-            'icon' => 'icons/24/outline/academic-cap.svg',
+            'icon' => 'document-chart-bar',
             'children' => [
                 [
                     'label' => 'LBP Form 1',
@@ -23,37 +23,101 @@ return [
             ],
         ],
         [
+            'label' => 'Management',
+            'icon' => 'cog-6-tooth',
+            'route' => 'management.index',
+        ],
+        [
             'label' => 'Settings',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            'route' => 'reports',
+            'icon' => 'adjustments-horizontal',
+            'children' => [
+                [
+                    'label' => 'Profile Settings',
+                    'route' => 'profile.edit',
+                ],
+                [
+                    'label' => 'Role Permissions',
+                    'route' => 'role-permissions.index',
+                ],
+            ],
         ],
-        [
-            'label' => 'Departments',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            'route' => 'departments.index',
-        ],
-        [
-            'label' => 'Goals',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            'route' => 'obligationRequests',
-        ],
-        [
-            'label' => 'Setup',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            'route' => 'setpUp',
-        ],
+        // [
+        //     'label' => 'Departments',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'departments.index',
+        // ],
+        // [
+        //     'label' => 'Accounts',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'accounts.index',
+        // ],
+        // [
+        //     'label' => 'Sub Accounts',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'sub-accounts.index',
+        // ],
+        // [
+        //     'label' => 'Expense Types',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'expense-types.index',
+        // ],
+        // [
+        //     'label' => 'Roles',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'roles.index',
+        // ],
+        // [
+        //     'label' => 'Users',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'users.index',
+        // ],
+        // [
+        //     'label' => 'Fund Types',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'fund-types.index',
+        // ],
+        // [
+        //     'label' => 'Forms',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'forms.index',
+        // ],
+        // [
+        //     'label' => 'Form Signatories',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'form-signatories.index',
+        // ],
+        // [
+        //     'label' => 'User Department Assignments',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'user-department-assignments.index',
+        // ],
+        // [
+        //     'label' => 'Goals',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'obligationRequests.index',
+        // ],
+        // [
+        //     'label' => 'Setup',
+        //     'icon' => 'icons/24/outline/academic-cap.svg',
+        //     'route' => 'setUp.index',
+        // ],
     ],
 
     'footer_links' => [
         [
-            'label' => 'Help',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            // fallback
+            'label' => 'Profile',
+            'icon' => 'user-circle',
+            'route' => 'profile.edit',
+        ],
+        [
+            'label' => 'Help & Support',
+            'icon' => 'question-mark-circle',
+            'href' => '#',
         ],
         [
             'label' => 'Logout',
-            'icon' => 'icons/24/outline/academic-cap.svg',
-            'route' => 'logout',
+            'icon' => 'arrow-right-on-rectangle',
+            'action' => 'logout',
         ],
     ],
 
