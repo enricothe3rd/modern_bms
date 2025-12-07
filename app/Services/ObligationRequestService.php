@@ -106,7 +106,12 @@ class ObligationRequestService
                 $obr->update(['total_amount' => $totalAmount]);
             }
 
-            return $obr->fresh(['signatories', 'items']);
+            $obrWithRelations = $obr->fresh(['signatories', 'items', 'department', 'claimantPayee']);
+            
+            // Broadcast event for real-time updates
+            event(new \App\Events\ObligationRequestCreated($obrWithRelations));
+
+            return $obrWithRelations;
         });
     }
 
@@ -192,12 +197,25 @@ class ObligationRequestService
                 $obr->update(['total_amount' => $totalAmount]);
             }
 
-            return $obr->fresh(['signatories', 'items']);
+            $obrWithRelations = $obr->fresh(['signatories', 'items', 'department', 'claimantPayee']);
+            
+            // Broadcast event for real-time updates
+            event(new \App\Events\ObligationRequestUpdated($obrWithRelations));
+
+            return $obrWithRelations;
         });
     }
 
     public function deleteObligationRequest($id)
     {
-        return $this->repo->delete($id);
+        $obr = $this->repo->find($id);
+        $obrNumber = $obr->obr_number;
+        
+        $result = $this->repo->delete($id);
+        
+        // Broadcast event for real-time updates
+        event(new \App\Events\ObligationRequestDeleted($id, $obrNumber));
+        
+        return $result;
     }
 }

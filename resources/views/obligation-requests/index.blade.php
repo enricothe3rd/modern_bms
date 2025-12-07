@@ -388,8 +388,8 @@
         $('.dataTables_filter input').addClass('border border-gray-300 rounded-lg px-4 py-2 w-full sm:w-64');
         $('.dt-buttons').addClass('flex flex-wrap gap-2');
 
-        // Start polling for new obligations
-        startPolling();
+        // Setup real-time updates (Echo or polling fallback)
+        setupRealTimeUpdates();
         @endif
 
         // Reopen modal if there are validation errors
@@ -504,6 +504,10 @@
     // Function to update existing OBR row
     function updateObrRow(row, obr) {
         // Update the row data
+        row.querySelector('td:nth-child(1)').textContent = obr.obr_number;
+        row.querySelector('td:nth-child(2)').textContent = obr.department_name;
+        row.querySelector('td:nth-child(3)').textContent = obr.claimant_payee_name;
+        row.querySelector('td:nth-child(4)').textContent = obr.obligation_date;
         row.querySelector('td:nth-child(5)').textContent = `₱${parseFloat(obr.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         
         const statusClass = obr.status === 'approved' ? 'bg-green-100 text-green-800' :
@@ -514,29 +518,121 @@
         statusSpan.className = `px-2 py-1 text-xs rounded-full ${statusClass}`;
         statusSpan.textContent = obr.status.charAt(0).toUpperCase() + obr.status.slice(1);
         
-        // Highlight updated row
+        // Highlight updated row with blue
         row.classList.add('bg-blue-50');
         setTimeout(() => {
             row.classList.remove('bg-blue-50');
         }, 3000);
+        
+        // Update DataTable if it exists
+        if (dataTable) {
+            dataTable.row(row).invalidate().draw(false);
+        }
+    }
+
+    // Function to remove OBR row
+    function removeObrRow(row, obrNumber) {
+        // Add fade-out animation
+        row.classList.add('bg-red-50');
+        row.style.transition = 'opacity 0.5s';
+        row.style.opacity = '0';
+        
+        setTimeout(() => {
+            if (dataTable) {
+                // Remove from DataTable
+                dataTable.row(row).remove().draw(false);
+            } else {
+                // Remove from DOM
+                row.remove();
+            }
+        }, 500);
     }
 
     // Function to show notification
-    function showNotification(message) {
+    function showNotification(message, type = 'success') {
         // Create notification element
         const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in';
+        const bgColor = type === 'info' ? 'bg-blue-500' : type === 'error' ? 'bg-red-500' : 'bg-green-500';
+        notification.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in`;
         notification.textContent = message;
         document.body.appendChild(notification);
         
-        // Remove after 3 seconds
+        // Remove after 3 seconds (or 5 seconds for info)
+        const duration = type === 'info' ? 5000 : 3000;
         setTimeout(() => {
             notification.classList.add('animate-fade-out');
             setTimeout(() => notification.remove(), 500);
-        }, 3000);
+        }, duration);
     }
 
-    // Start polling
+    // Setup real-time updates (Echo or polling fallback)
+    function setupRealTimeUpdates() {
+        // Check if Laravel Echo is available
+        if (typeof window.Echo !== 'undefined') {
+            console.log('✅ Using Laravel Echo for real-time updates');
+            console.log('📡 Connecting to Pusher...');
+            
+            // Listen for obligation request events
+            window.Echo.channel('obligation-requests')
+                .listen('.obligation.created', (e) => {
+                    console.log('🔔 New obligation received via broadcast:', e);
+                    
+                    // Check if this obligation already exists in the table
+                    const existingRow = document.querySelector(`tr[data-obr-id="${e.id}"]`);
+                    if (existingRow) {
+                        console.log('⚠️ Obligation already exists in table, skipping duplicate');
+                        return;
+                    }
+                    
+                    addNewObrRow(e);
+                    showNotification('New obligation request created by another user!');
+                })
+                .listen('.obligation.updated', (e) => {
+                    console.log('✏️ Obligation updated via broadcast:', e);
+                    
+                    const existingRow = document.querySelector(`tr[data-obr-id="${e.id}"]`);
+                    if (existingRow) {
+                        updateObrRow(existingRow, e);
+                        showNotification(`Obligation ${e.obr_number} updated by another user!`, 'info');
+                    } else {
+                        // If row doesn't exist, add it (edge case)
+                        addNewObrRow(e);
+                    }
+                })
+                .listen('.obligation.deleted', (e) => {
+                    console.log('🗑️ Obligation deleted via broadcast:', e);
+                    
+                    const existingRow = document.querySelector(`tr[data-obr-id="${e.id}"]`);
+                    if (existingRow) {
+                        removeObrRow(existingRow, e.obr_number);
+                        showNotification(`Obligation ${e.obr_number} deleted by another user!`, 'error');
+                    }
+                })
+                .subscribed(() => {
+                    console.log('✅ Successfully subscribed to obligation-requests channel');
+                    showNotification('Real-time updates active', 'info');
+                })
+                .error((error) => {
+                    console.error('❌ Error subscribing to channel:', error);
+                });
+                
+            // Log Pusher connection state
+            if (window.Echo.connector && window.Echo.connector.pusher) {
+                window.Echo.connector.pusher.connection.bind('connected', () => {
+                    console.log('✅ Pusher connected successfully');
+                });
+                
+                window.Echo.connector.pusher.connection.bind('error', (err) => {
+                    console.error('❌ Pusher connection error:', err);
+                });
+            }
+        } else {
+            console.log('⚠️ Laravel Echo not available, using polling fallback');
+            startPolling();
+        }
+    }
+
+    // Start polling (fallback when Echo is not available)
     function startPolling() {
         // Poll every 10 seconds
         pollingInterval = setInterval(checkForNewObligations, 10000);
@@ -550,15 +646,28 @@
         }
     }
 
-    // Pause polling when modal is open, resume when closed
+    // Get all DOM elements first
+    const addBtn = document.getElementById('addObrBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const closeModal = document.getElementById('closeModal');
     const modal = document.getElementById('obrModal');
+    const formElement = document.getElementById('formElement');
+    const formTitle = document.getElementById('formTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const addItemBtn = document.getElementById('addItemBtn');
+    const itemsContainer = document.getElementById('itemsContainer');
+
+    // Pause polling when modal is open, resume when closed (only if using polling)
     const observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.attributeName === 'class') {
-                if (modal.classList.contains('hidden')) {
-                    startPolling();
-                } else {
-                    stopPolling();
+                // Only manage polling if Echo is not available
+                if (typeof window.Echo === 'undefined') {
+                    if (modal.classList.contains('hidden')) {
+                        startPolling();
+                    } else {
+                        stopPolling();
+                    }
                 }
             }
         });
@@ -576,17 +685,6 @@
             newButton.addEventListener('click', handleEditButtonClick);
         });
     }
-    });
-
-    const addBtn = document.getElementById('addObrBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const closeModal = document.getElementById('closeModal');
-    const modal = document.getElementById('obrModal');
-    const formElement = document.getElementById('formElement');
-    const formTitle = document.getElementById('formTitle');
-    const submitBtn = document.getElementById('submitBtn');
-    const addItemBtn = document.getElementById('addItemBtn');
-    const itemsContainer = document.getElementById('itemsContainer');
 
     // Form submit validation
     formElement.addEventListener('submit', function(e) {
