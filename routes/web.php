@@ -32,6 +32,7 @@ Route::resource('obligation-requests', ObligationRequestController::class)->exce
 
 // API routes for cascading dropdowns
 Route::prefix('api/obligation-requests')->middleware('auth')->group(function () {
+    Route::get('/', [ObligationRequestApiController::class, 'getObligationRequests']);
     Route::get('fund-types/{fundType}/departments', [ObligationRequestApiController::class, 'getDepartmentsByFundType']);
     Route::get('fund-types/{fundType}/departments/{department}/expense-types', [ObligationRequestApiController::class, 'getExpenseTypesByDepartment']);
     Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts', [ObligationRequestApiController::class, 'getAccountsByExpenseType']);

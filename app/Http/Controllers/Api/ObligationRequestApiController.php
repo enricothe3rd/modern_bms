@@ -55,6 +55,29 @@ class ObligationRequestApiController extends Controller
             ->with(['account', 'subAccount.account'])
             ->get();
 
+        // Calculate obligated amounts for accounts
+        $accountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
+                $query->whereYear('obligation_date', $year);
+            })
+            ->where('department_id', $departmentId)
+            ->where('expense_type_id', $expenseTypeId)
+            ->whereNotNull('account_id')
+            ->whereNull('sub_account_id')
+            ->selectRaw('account_id, SUM(amount) as total_obligated')
+            ->groupBy('account_id')
+            ->pluck('total_obligated', 'account_id');
+
+        // Calculate obligated amounts for sub-accounts
+        $subAccountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
+                $query->whereYear('obligation_date', $year);
+            })
+            ->where('department_id', $departmentId)
+            ->where('expense_type_id', $expenseTypeId)
+            ->whereNotNull('sub_account_id')
+            ->selectRaw('sub_account_id, SUM(amount) as total_obligated')
+            ->groupBy('sub_account_id')
+            ->pluck('total_obligated', 'sub_account_id');
+
         // Build hierarchical structure
         $accountsMap = [];
         $subAccountsByParent = [];
@@ -64,6 +87,7 @@ class ObligationRequestApiController extends Controller
                 // Direct main account allocation (no sub-account)
                 $accountId = $allocation->account->id;
                 if (!isset($accountsMap[$accountId])) {
+                    $obligated = $accountObligations[$accountId] ?? 0;
                     $accountsMap[$accountId] = [
                         'id' => $allocation->account->id,
                         'code' => $allocation->account->code,
@@ -71,11 +95,14 @@ class ObligationRequestApiController extends Controller
                         'type' => 'account',
                         'is_selectable' => true, // Will be set to false if has sub-accounts
                         'allocated_amount' => $allocation->amount,
+                        'obligated_amount' => $obligated,
+                        'available_amount' => $allocation->amount - $obligated,
                         'sub_accounts' => []
                     ];
                 } else {
                     // Add to allocated amount if multiple allocations exist
                     $accountsMap[$accountId]['allocated_amount'] += $allocation->amount;
+                    $accountsMap[$accountId]['available_amount'] = $accountsMap[$accountId]['allocated_amount'] - $accountsMap[$accountId]['obligated_amount'];
                 }
             } elseif ($allocation->sub_account_id && $allocation->subAccount) {
                 // Sub-account allocation
@@ -92,6 +119,8 @@ class ObligationRequestApiController extends Controller
                             'type' => 'account',
                             'is_selectable' => false, // Parent with sub-accounts is not selectable
                             'allocated_amount' => 0,
+                            'obligated_amount' => 0,
+                            'available_amount' => 0,
                             'sub_accounts' => []
                         ];
                     } else {
@@ -102,13 +131,16 @@ class ObligationRequestApiController extends Controller
                     // Add sub-account
                     $subAccountId = $allocation->subAccount->id;
                     if (!isset($subAccountsByParent[$parentId][$subAccountId])) {
+                        $obligated = $subAccountObligations[$subAccountId] ?? 0;
                         $accountsMap[$parentId]['sub_accounts'][] = [
                             'id' => $allocation->subAccount->id,
                             'code' => $allocation->subAccount->code,
                             'description' => $allocation->subAccount->description,
                             'type' => 'sub_account',
                             'parent_id' => $parentId,
-                            'allocated_amount' => $allocation->amount
+                            'allocated_amount' => $allocation->amount,
+                            'obligated_amount' => $obligated,
+                            'available_amount' => $allocation->amount - $obligated
                         ];
                         $subAccountsByParent[$parentId][$subAccountId] = true;
                     }
@@ -144,5 +176,30 @@ class ObligationRequestApiController extends Controller
         })->unique('id')->values();
 
         return response()->json($subAccounts);
+    }
+
+    /**
+     * Get all obligation requests for real-time updates
+     */
+    public function getObligationRequests()
+    {
+        $obligationRequests = \App\Models\ObligationRequest::with(['department', 'claimantPayee'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($obr) {
+                return [
+                    'id' => $obr->id,
+                    'obr_number' => $obr->obr_number,
+                    'department_name' => $obr->department->name,
+                    'claimant_payee_name' => $obr->claimantPayee->name,
+                    'obligation_date' => $obr->obligation_date->format('M d, Y'),
+                    'total_amount' => $obr->total_amount,
+                    'status' => $obr->status,
+                    'created_at' => $obr->created_at->toIso8601String(),
+                    'updated_at' => $obr->updated_at->toIso8601String(),
+                ];
+            });
+
+        return response()->json($obligationRequests);
     }
 }

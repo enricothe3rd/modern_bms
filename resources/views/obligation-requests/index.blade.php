@@ -6,6 +6,23 @@
         subtitle="Create and manage obligation requests"
     />
 
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        .animate-fade-out {
+            animation: fadeOut 0.3s ease-out;
+        }
+    </style>
+
     <div class="max-w-7xl mx-auto p-6">
 
         <!-- Header -->
@@ -39,7 +56,7 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($obligationRequests as $obr)
-                        <tr class="hover:bg-gray-50">
+                        <tr class="hover:bg-gray-50" data-obr-id="{{ $obr->id }}">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $obr->obr_number }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $obr->department->name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $obr->claimantPayee->name }}</td>
@@ -111,6 +128,18 @@
                 <!-- Form -->
                 <form id="formElement" method="POST" action="{{ route('obligation-requests.store') }}">
                     @csrf
+
+                    <!-- Validation Errors -->
+                    @if ($errors->any())
+                        <div class="bg-red-50 border-l-4 border-red-400 text-red-900 px-4 py-3 mb-6 rounded">
+                            <div class="font-bold mb-2">Please correct the following errors:</div>
+                            <ul class="list-disc list-inside space-y-1">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <!-- OBR Number -->
@@ -249,10 +278,38 @@
                     <div class="border-t pt-4 mb-6">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-semibold">Line Items</h3>
-                            <button type="button" id="addItemBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
-                                + Add Item
-                            </button>
+                            <div class="flex gap-2">
+                                <button type="button" id="refreshBudgetBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm hidden" title="Refresh budget data">
+                                    🔄 Refresh Budget
+                                </button>
+                                <button type="button" id="addItemBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                    + Add Item
+                                </button>
+                            </div>
                         </div>
+                        
+                        <!-- Budget Summary -->
+                        <div id="budgetSummary" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 hidden">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                    <span class="text-gray-600">Total Allocated:</span>
+                                    <span class="font-bold text-blue-700 ml-2" id="totalAllocated">₱0.00</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Already Obligated:</span>
+                                    <span class="font-bold text-orange-600 ml-2" id="totalObligated">₱0.00</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Current Entry:</span>
+                                    <span class="font-bold text-gray-900 ml-2" id="totalEntered">₱0.00</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-600">Available:</span>
+                                    <span class="font-bold ml-2" id="totalAvailable">₱0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="itemsContainer" class="space-y-4">
                             <!-- Items will be added here dynamically -->
                         </div>
@@ -272,10 +329,45 @@
     @push('scripts')
     <script>
     let itemIndex = 0;
+    
+    // Helper function to populate account dropdown with budget data
+    function populateAccountDropdown(accountSelect, accounts) {
+        accountSelect.innerHTML = '<option value="">Select Account or Sub Account</option>';
+        
+        accounts.forEach(acc => {
+            const mainOption = document.createElement('option');
+            mainOption.value = `account_${acc.id}`;
+            const amountText = acc.is_selectable ? ` [Avail: ₱${parseFloat(acc.available_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]` : '';
+            mainOption.textContent = `${acc.code} - ${acc.description}${amountText}`;
+            mainOption.disabled = !acc.is_selectable;
+            mainOption.style.fontWeight = 'bold';
+            mainOption.dataset.allocated = acc.allocated_amount;
+            mainOption.dataset.obligated = acc.obligated_amount;
+            mainOption.dataset.available = acc.available_amount;
+            accountSelect.appendChild(mainOption);
+            
+            if (acc.sub_accounts && acc.sub_accounts.length > 0) {
+                acc.sub_accounts.forEach(sub => {
+                    const subOption = document.createElement('option');
+                    subOption.value = `sub_account_${sub.id}`;
+                    const subAmountText = ` [Avail: ₱${parseFloat(sub.available_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]`;
+                    subOption.textContent = `  ↳ ${sub.code} - ${sub.description}${subAmountText}`;
+                    subOption.dataset.allocated = sub.allocated_amount;
+                    subOption.dataset.obligated = sub.obligated_amount;
+                    subOption.dataset.available = sub.available_amount;
+                    accountSelect.appendChild(subOption);
+                });
+            }
+        });
+    }
+
+    let dataTable = null;
+    let lastUpdateTime = new Date().toISOString();
+    let pollingInterval = null;
 
     $(document).ready(function() {
         @if($obligationRequests->count() > 0)
-        $('#obrTable').DataTable({
+        dataTable = $('#obrTable').DataTable({
             dom: "<'flex flex-col sm:flex-row justify-between items-center mb-4 gap-4'<'buttons'B><'search-wrapper'f>>" +
                  "rt" +
                  "<'flex flex-col sm:flex-row justify-between items-center mt-4 gap-4'<'info'i><'pagination'p>>",
@@ -289,12 +381,201 @@
             },
             pageLength: 10,
             responsive: true,
+            order: [[0, 'desc']], // Sort by OBR number descending (newest first)
         });
 
         // Style DataTables elements
         $('.dataTables_filter input').addClass('border border-gray-300 rounded-lg px-4 py-2 w-full sm:w-64');
         $('.dt-buttons').addClass('flex flex-wrap gap-2');
+
+        // Start polling for new obligations
+        startPolling();
         @endif
+
+        // Reopen modal if there are validation errors
+        @if ($errors->any())
+            document.getElementById('obrModal').classList.remove('hidden');
+            // Scroll to top of modal to show errors
+            document.querySelector('#obrModal .bg-white').scrollTop = 0;
+        @endif
+    });
+
+    // Function to check for new obligations
+    function checkForNewObligations() {
+        fetch('/api/obligation-requests')
+            .then(response => response.json())
+            .then(data => {
+                let hasNewData = false;
+                
+                data.forEach(obr => {
+                    // Check if this obligation is newer than our last update
+                    if (obr.created_at > lastUpdateTime || obr.updated_at > lastUpdateTime) {
+                        hasNewData = true;
+                        
+                        // Check if row already exists
+                        const existingRow = document.querySelector(`tr[data-obr-id="${obr.id}"]`);
+                        
+                        if (!existingRow) {
+                            // Add new row
+                            addNewObrRow(obr);
+                        } else {
+                            // Update existing row
+                            updateObrRow(existingRow, obr);
+                        }
+                    }
+                });
+                
+                if (hasNewData) {
+                    lastUpdateTime = new Date().toISOString();
+                    
+                    // Show notification
+                    showNotification('New obligation request(s) detected!');
+                }
+            })
+            .catch(error => console.error('Error checking for new obligations:', error));
+    }
+
+    // Function to add new OBR row to table
+    function addNewObrRow(obr) {
+        const statusClass = obr.status === 'approved' ? 'bg-green-100 text-green-800' :
+                           obr.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                           'bg-gray-100 text-gray-800';
+        
+        const newRow = `
+            <tr class="hover:bg-gray-50 bg-yellow-50 transition-colors duration-1000" data-obr-id="${obr.id}">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${obr.obr_number}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${obr.department_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${obr.claimant_payee_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${obr.obligation_date}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">₱${parseFloat(obr.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs rounded-full ${statusClass}">
+                        ${obr.status.charAt(0).toUpperCase() + obr.status.slice(1)}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div class="flex gap-2">
+                        <a href="/obligation-requests/${obr.id}" 
+                           class="text-blue-600 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50"
+                           title="View">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </a>
+                        <button class="editBtn text-yellow-500 hover:text-yellow-600 p-1 rounded-full hover:bg-yellow-50"
+                            data-id="${obr.id}"
+                            title="Edit">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                        <form action="/obligation-requests/${obr.id}" method="POST" class="inline-block">
+                            <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit"
+                                class="text-red-600 hover:text-red-700 p-1 rounded-full hover:bg-red-50"
+                                onclick="return confirm('Are you sure you want to delete this OBR?')"
+                                title="Delete">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        if (dataTable) {
+            // Add to DataTable
+            const rowNode = dataTable.row.add($(newRow)).draw(false).node();
+            
+            // Remove highlight after 3 seconds
+            setTimeout(() => {
+                $(rowNode).removeClass('bg-yellow-50');
+            }, 3000);
+            
+            // Reattach edit button event listeners
+            attachEditButtonListeners();
+        }
+    }
+
+    // Function to update existing OBR row
+    function updateObrRow(row, obr) {
+        // Update the row data
+        row.querySelector('td:nth-child(5)').textContent = `₱${parseFloat(obr.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        
+        const statusClass = obr.status === 'approved' ? 'bg-green-100 text-green-800' :
+                           obr.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                           'bg-gray-100 text-gray-800';
+        
+        const statusSpan = row.querySelector('td:nth-child(6) span');
+        statusSpan.className = `px-2 py-1 text-xs rounded-full ${statusClass}`;
+        statusSpan.textContent = obr.status.charAt(0).toUpperCase() + obr.status.slice(1);
+        
+        // Highlight updated row
+        row.classList.add('bg-blue-50');
+        setTimeout(() => {
+            row.classList.remove('bg-blue-50');
+        }, 3000);
+    }
+
+    // Function to show notification
+    function showNotification(message) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.classList.add('animate-fade-out');
+            setTimeout(() => notification.remove(), 500);
+        }, 3000);
+    }
+
+    // Start polling
+    function startPolling() {
+        // Poll every 10 seconds
+        pollingInterval = setInterval(checkForNewObligations, 10000);
+    }
+
+    // Stop polling (useful when modal is open)
+    function stopPolling() {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+    }
+
+    // Pause polling when modal is open, resume when closed
+    const modal = document.getElementById('obrModal');
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.attributeName === 'class') {
+                if (modal.classList.contains('hidden')) {
+                    startPolling();
+                } else {
+                    stopPolling();
+                }
+            }
+        });
+    });
+    observer.observe(modal, { attributes: true });
+
+    // Function to reattach edit button listeners after adding new rows
+    function attachEditButtonListeners() {
+        document.querySelectorAll('.editBtn').forEach(button => {
+            // Remove old listeners by cloning
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            // Add new listener
+            newButton.addEventListener('click', handleEditButtonClick);
+        });
+    }
     });
 
     const addBtn = document.getElementById('addObrBtn');
@@ -306,6 +587,29 @@
     const submitBtn = document.getElementById('submitBtn');
     const addItemBtn = document.getElementById('addItemBtn');
     const itemsContainer = document.getElementById('itemsContainer');
+
+    // Form submit validation
+    formElement.addEventListener('submit', function(e) {
+        // Check if any item exceeds available budget
+        let hasOverBudget = false;
+        let overBudgetItems = [];
+        
+        document.querySelectorAll('.item-row').forEach((row, index) => {
+            const availableAmount = parseFloat(row.dataset.availableAmount) || 0;
+            const enteredAmount = parseFloat(row.querySelector('.amount-input').value) || 0;
+            
+            if (availableAmount > 0 && enteredAmount > availableAmount) {
+                hasOverBudget = true;
+                overBudgetItems.push(index + 1);
+            }
+        });
+        
+        if (hasOverBudget) {
+            e.preventDefault();
+            alert(`Cannot submit: Item(s) ${overBudgetItems.join(', ')} exceed available budget.\n\nThis may happen if another user created an obligation while you were working.\n\nPlease refresh the page to see updated budget availability.`);
+            return false;
+        }
+    });
 
     // Show modal for Add
     addBtn.addEventListener('click', () => {
@@ -322,10 +626,14 @@
         if (putMethod) putMethod.remove();
     });
 
-    // Edit buttons
+    // Edit buttons - attach initial listeners
     document.querySelectorAll('.editBtn').forEach(button => {
-        button.addEventListener('click', async function() {
-            const obrId = this.dataset.id;
+        button.addEventListener('click', handleEditButtonClick);
+    });
+
+    // Edit button handler (extracted for reuse)
+    async function handleEditButtonClick() {
+        const obrId = this.dataset.id;
             
             try {
                 // Fetch OBR data with JSON headers
@@ -427,27 +735,7 @@
                         const accRes = await fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${item.department_id}/expense-types/${item.expense_type_id}/accounts?year=${budgetYear}`);
                         const accounts = await accRes.json();
                         const accSelect = row.querySelector('.account-select');
-                        accSelect.innerHTML = '<option value="">Select Account or Sub Account</option>';
-                        
-                        accounts.forEach(acc => {
-                            const mainOption = document.createElement('option');
-                            mainOption.value = `account_${acc.id}`;
-                            const amountText = acc.is_selectable ? ` [₱${parseFloat(acc.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]` : '';
-                            mainOption.textContent = `${acc.code} - ${acc.description}${amountText}`;
-                            mainOption.disabled = !acc.is_selectable;
-                            mainOption.style.fontWeight = 'bold';
-                            accSelect.appendChild(mainOption);
-                            
-                            if (acc.sub_accounts && acc.sub_accounts.length > 0) {
-                                acc.sub_accounts.forEach(sub => {
-                                    const subOption = document.createElement('option');
-                                    subOption.value = `sub_account_${sub.id}`;
-                                    const subAmountText = ` [₱${parseFloat(sub.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]`;
-                                    subOption.textContent = `  ↳ ${sub.code} - ${sub.description}${subAmountText}`;
-                                    accSelect.appendChild(subOption);
-                                });
-                            }
-                        });
+                        populateAccountDropdown(accSelect, accounts);
                         
                         // Set selected account or sub-account
                         if (item.sub_account_id) {
@@ -457,18 +745,39 @@
                             accSelect.value = `account_${item.account_id}`;
                             row.querySelector('.account-id-input').value = item.account_id;
                         }
+                        
+                        // Extract and store amounts from selected option
+                        const selectedOption = accSelect.options[accSelect.selectedIndex];
+                        if (selectedOption && selectedOption.dataset.allocated) {
+                            const allocatedAmount = parseFloat(selectedOption.dataset.allocated);
+                            const obligatedAmount = parseFloat(selectedOption.dataset.obligated);
+                            const availableAmount = parseFloat(selectedOption.dataset.available);
+                            
+                            row.dataset.allocatedAmount = allocatedAmount;
+                            row.dataset.obligatedAmount = obligatedAmount;
+                            row.dataset.availableAmount = availableAmount;
+                            
+                            // Show budget info
+                            const budgetInfo = row.querySelector('.item-budget-info');
+                            budgetInfo.classList.remove('hidden');
+                            row.querySelector('.item-allocated').textContent = `₱${allocatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                            row.querySelector('.item-obligated').textContent = `₱${obligatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                            row.querySelector('.item-available').textContent = `₱${availableAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                        }
                     }
                     
                     // Set amount
-                    row.querySelector('input[type="number"]').value = item.amount;
+                    row.querySelector('.amount-input').value = item.amount;
                 }
+                
+                // Update budget calculations after all items are loaded
+                updateBudgetCalculations();
                 
             } catch (error) {
                 console.error('Error loading OBR data:', error);
                 alert('Error loading obligation request data');
             }
-        });
-    });
+    }
 
     // Cancel / Close modal
     cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
@@ -476,6 +785,80 @@
 
     // Add Item
     addItemBtn.addEventListener('click', addItem);
+
+    // Refresh Budget Button
+    const refreshBudgetBtn = document.getElementById('refreshBudgetBtn');
+    refreshBudgetBtn.addEventListener('click', async function() {
+        const fundTypeId = document.getElementById('fundTypeInput').value;
+        const budgetYear = document.getElementById('budgetYearInput').value;
+        
+        if (!fundTypeId) {
+            alert('Please select a fund type first.');
+            return;
+        }
+        
+        // Show loading state
+        this.disabled = true;
+        this.textContent = '⏳ Refreshing...';
+        
+        try {
+            // Reload accounts for each item that has expense type selected
+            const refreshPromises = [];
+            
+            document.querySelectorAll('.item-row').forEach(row => {
+                const deptId = row.querySelector('.department-select').value;
+                const expenseTypeId = row.querySelector('.expense-type-select').value;
+                const accountSelect = row.querySelector('.account-select');
+                const currentValue = accountSelect.value; // Remember selection
+                
+                if (deptId && expenseTypeId) {
+                    const promise = fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${deptId}/expense-types/${expenseTypeId}/accounts?year=${budgetYear}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            populateAccountDropdown(accountSelect, data);
+                            
+                            // Try to restore previous selection
+                            if (currentValue) {
+                                accountSelect.value = currentValue;
+                                
+                                // Update budget info with new data
+                                const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+                                if (selectedOption && selectedOption.dataset.allocated) {
+                                    const allocatedAmount = parseFloat(selectedOption.dataset.allocated);
+                                    const obligatedAmount = parseFloat(selectedOption.dataset.obligated);
+                                    const availableAmount = parseFloat(selectedOption.dataset.available);
+                                    
+                                    row.dataset.allocatedAmount = allocatedAmount;
+                                    row.dataset.obligatedAmount = obligatedAmount;
+                                    row.dataset.availableAmount = availableAmount;
+                                    
+                                    row.querySelector('.item-allocated').textContent = `₱${allocatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                                    row.querySelector('.item-obligated').textContent = `₱${obligatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                                    row.querySelector('.item-available').textContent = `₱${availableAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                                }
+                            }
+                        });
+                    refreshPromises.push(promise);
+                }
+            });
+            
+            await Promise.all(refreshPromises);
+            
+            // Update calculations with fresh data
+            updateBudgetCalculations();
+            
+            // Show success message
+            alert('Budget data refreshed successfully!');
+            
+        } catch (error) {
+            console.error('Error refreshing budget:', error);
+            alert('Error refreshing budget data. Please try again.');
+        } finally {
+            // Restore button state
+            this.disabled = false;
+            this.textContent = '🔄 Refresh Budget';
+        }
+    });
 
     function addItem() {
         const itemHtml = `
@@ -507,7 +890,15 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                        <input type="number" name="items[${itemIndex}][amount]" step="0.01" min="0.01" class="w-full border border-gray-300 rounded-lg px-3 py-2" required>
+                        <input type="number" name="items[${itemIndex}][amount]" step="0.01" min="0.01" class="amount-input w-full border border-gray-300 rounded-lg px-3 py-2" required>
+                        <div class="item-budget-info mt-1 text-xs hidden">
+                            <span class="text-gray-600">Allocated: </span>
+                            <span class="item-allocated font-semibold text-blue-600">₱0.00</span>
+                            <span class="text-gray-600 ml-2">| Obligated: </span>
+                            <span class="item-obligated font-semibold text-orange-600">₱0.00</span>
+                            <span class="text-gray-600 ml-2">| Available: </span>
+                            <span class="item-available font-semibold">₱0.00</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -603,29 +994,7 @@
                 fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${deptId}/expense-types/${expenseTypeId}/accounts?year=${budgetYear}`)
                     .then(res => res.json())
                     .then(data => {
-                        accountSelect.innerHTML = '<option value="">Select Account or Sub Account</option>';
-                        
-                        data.forEach(acc => {
-                            // Add main account (disabled if has sub-accounts)
-                            const mainOption = document.createElement('option');
-                            mainOption.value = `account_${acc.id}`;
-                            const amountText = acc.is_selectable ? ` [₱${parseFloat(acc.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]` : '';
-                            mainOption.textContent = `${acc.code} - ${acc.description}${amountText}`;
-                            mainOption.disabled = !acc.is_selectable;
-                            mainOption.style.fontWeight = 'bold';
-                            accountSelect.appendChild(mainOption);
-                            
-                            // Add sub-accounts if any
-                            if (acc.sub_accounts && acc.sub_accounts.length > 0) {
-                                acc.sub_accounts.forEach(sub => {
-                                    const subOption = document.createElement('option');
-                                    subOption.value = `sub_account_${sub.id}`;
-                                    const subAmountText = ` [₱${parseFloat(sub.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]`;
-                                    subOption.textContent = `  ↳ ${sub.code} - ${sub.description}${subAmountText}`;
-                                    accountSelect.appendChild(subOption);
-                                });
-                            }
-                        });
+                        populateAccountDropdown(accountSelect, data);
                     });
                 
                 // Reset hidden fields
@@ -676,41 +1045,20 @@
                 fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${deptId}/expense-types/${expenseTypeId}/accounts?year=${budgetYear}`)
                     .then(res => res.json())
                     .then(data => {
-                        accountSelect.innerHTML = '<option value="">Select Account or Sub Account</option>';
-                        
-                        data.forEach(acc => {
-                            // Add main account (disabled if has sub-accounts)
-                            const mainOption = document.createElement('option');
-                            mainOption.value = `account_${acc.id}`;
-                            const amountText = acc.is_selectable ? ` [₱${parseFloat(acc.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]` : '';
-                            mainOption.textContent = `${acc.code} - ${acc.description}${amountText}`;
-                            mainOption.disabled = !acc.is_selectable;
-                            mainOption.style.fontWeight = 'bold';
-                            accountSelect.appendChild(mainOption);
-                            
-                            // Add sub-accounts if any
-                            if (acc.sub_accounts && acc.sub_accounts.length > 0) {
-                                acc.sub_accounts.forEach(sub => {
-                                    const subOption = document.createElement('option');
-                                    subOption.value = `sub_account_${sub.id}`;
-                                    const subAmountText = ` [₱${parseFloat(sub.allocated_amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}]`;
-                                    subOption.textContent = `  ↳ ${sub.code} - ${sub.description}${subAmountText}`;
-                                    accountSelect.appendChild(subOption);
-                                });
-                            }
-                        });
+                        populateAccountDropdown(accountSelect, data);
                     });
             } else {
                 accountSelect.innerHTML = '<option value="">Select Account or Sub Account</option>';
             }
         }
 
-        // Account/Sub Account selection -> Update hidden fields
+        // Account/Sub Account selection -> Update hidden fields and store allocated amount
         if (e.target.classList.contains('account-select')) {
             const row = e.target.closest('.item-row');
             const selectedValue = e.target.value;
             const accountIdInput = row.querySelector('.account-id-input');
             const subAccountIdInput = row.querySelector('.sub-account-id-input');
+            const selectedOption = e.target.options[e.target.selectedIndex];
             
             // Reset hidden fields
             accountIdInput.value = '';
@@ -725,9 +1073,126 @@
                     const actualId = selectedValue.replace('sub_account_', '');
                     subAccountIdInput.value = actualId;
                 }
+                
+                // Extract amounts from option data attributes
+                if (selectedOption.dataset.allocated) {
+                    const allocatedAmount = parseFloat(selectedOption.dataset.allocated);
+                    const obligatedAmount = parseFloat(selectedOption.dataset.obligated);
+                    const availableAmount = parseFloat(selectedOption.dataset.available);
+                    
+                    row.dataset.allocatedAmount = allocatedAmount;
+                    row.dataset.obligatedAmount = obligatedAmount;
+                    row.dataset.availableAmount = availableAmount;
+                    
+                    // Show budget info for this item
+                    const budgetInfo = row.querySelector('.item-budget-info');
+                    budgetInfo.classList.remove('hidden');
+                    row.querySelector('.item-allocated').textContent = `₱${allocatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    row.querySelector('.item-obligated').textContent = `₱${obligatedAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    row.querySelector('.item-available').textContent = `₱${availableAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    
+                    // Update calculations
+                    updateBudgetCalculations();
+                }
+            } else {
+                // Hide budget info if no account selected
+                row.querySelector('.item-budget-info').classList.add('hidden');
+                delete row.dataset.allocatedAmount;
+                delete row.dataset.obligatedAmount;
+                delete row.dataset.availableAmount;
+                updateBudgetCalculations();
             }
         }
+        
+        // Amount input change -> Update calculations
+        if (e.target.classList.contains('amount-input')) {
+            updateBudgetCalculations();
+        }
     });
+
+    // Function to update all budget calculations
+    function updateBudgetCalculations() {
+        let totalAllocated = 0;
+        let totalObligated = 0;
+        let totalEntered = 0;
+        let hasAllocations = false;
+        let hasOverBudget = false;
+        
+        document.querySelectorAll('.item-row').forEach(row => {
+            const allocatedAmount = parseFloat(row.dataset.allocatedAmount) || 0;
+            const obligatedAmount = parseFloat(row.dataset.obligatedAmount) || 0;
+            const availableAmount = parseFloat(row.dataset.availableAmount) || 0;
+            const enteredAmount = parseFloat(row.querySelector('.amount-input').value) || 0;
+            
+            if (allocatedAmount > 0) {
+                hasAllocations = true;
+                totalAllocated += allocatedAmount;
+                totalObligated += obligatedAmount;
+                
+                // Update item-level available after current entry
+                const remainingAfterEntry = availableAmount - enteredAmount;
+                const itemAvailable = row.querySelector('.item-available');
+                itemAvailable.textContent = `₱${remainingAfterEntry.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                
+                // Color code: red if over budget, green if within
+                if (remainingAfterEntry < 0) {
+                    itemAvailable.classList.remove('text-green-600');
+                    itemAvailable.classList.add('text-red-600');
+                    hasOverBudget = true;
+                } else {
+                    itemAvailable.classList.remove('text-red-600');
+                    itemAvailable.classList.add('text-green-600');
+                }
+            }
+            
+            totalEntered += enteredAmount;
+        });
+        
+        // Show/hide budget summary and refresh button
+        const budgetSummary = document.getElementById('budgetSummary');
+        const refreshBudgetBtn = document.getElementById('refreshBudgetBtn');
+        if (hasAllocations) {
+            budgetSummary.classList.remove('hidden');
+            refreshBudgetBtn.classList.remove('hidden');
+            
+            // Update summary values
+            document.getElementById('totalAllocated').textContent = 
+                `₱${totalAllocated.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('totalObligated').textContent = 
+                `₱${totalObligated.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('totalEntered').textContent = 
+                `₱${totalEntered.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            const totalAvailable = totalAllocated - totalObligated - totalEntered;
+            const availableElement = document.getElementById('totalAvailable');
+            availableElement.textContent = 
+                `₱${totalAvailable.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Color code total available
+            if (totalAvailable < 0) {
+                availableElement.classList.remove('text-green-600');
+                availableElement.classList.add('text-red-600');
+            } else {
+                availableElement.classList.remove('text-red-600');
+                availableElement.classList.add('text-green-600');
+            }
+            
+            // Disable/enable submit button based on budget
+            const submitBtn = document.getElementById('submitBtn');
+            if (hasOverBudget) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                submitBtn.title = 'Cannot submit: Amount exceeds available budget';
+            } else {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitBtn.title = '';
+            }
+        } else {
+            budgetSummary.classList.add('hidden');
+            refreshBudgetBtn.classList.add('hidden');
+        }
+    }
     </script>
     @endpush
 

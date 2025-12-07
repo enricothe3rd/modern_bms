@@ -56,4 +56,98 @@ class ObligationRequestRequest extends FormRequest
             'items.min' => 'At least one item is required.',
         ];
     }
+
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $this->validateBudgetAvailability($validator);
+        });
+    }
+
+    /**
+     * Validate that each item's amount doesn't exceed available budget
+     */
+    protected function validateBudgetAvailability($validator)
+    {
+        if (!$this->has('items') || !is_array($this->items)) {
+            return;
+        }
+
+        $obligationDate = $this->obligation_date;
+        $year = date('Y', strtotime($obligationDate));
+        $obrId = $this->route('obligation_request'); // For updates, exclude current OBR
+
+        foreach ($this->items as $index => $item) {
+            if (!isset($item['department_id']) || !isset($item['expense_type_id'])) {
+                continue;
+            }
+
+            $departmentId = $item['department_id'];
+            $expenseTypeId = $item['expense_type_id'];
+            $accountId = $item['account_id'] ?? null;
+            $subAccountId = $item['sub_account_id'] ?? null;
+            $requestedAmount = $item['amount'] ?? 0;
+
+            // Get allocated amount
+            $allocation = \App\Models\DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
+                ->where('expense_type_id', $expenseTypeId)
+                ->where('year', $year);
+
+            if ($subAccountId) {
+                $allocation->where('sub_account_id', $subAccountId);
+            } elseif ($accountId) {
+                $allocation->where('account_id', $accountId)
+                    ->whereNull('sub_account_id');
+            } else {
+                continue; // Skip if no account specified
+            }
+
+            $allocatedAmount = $allocation->sum('amount');
+
+            if ($allocatedAmount == 0) {
+                $validator->errors()->add(
+                    "items.{$index}.amount",
+                    "No budget allocation found for this account in year {$year}."
+                );
+                continue;
+            }
+
+            // Calculate already obligated amount (excluding current OBR if updating)
+            $obligatedQuery = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
+                    $query->whereYear('obligation_date', $year);
+                })
+                ->where('department_id', $departmentId)
+                ->where('expense_type_id', $expenseTypeId);
+
+            if ($subAccountId) {
+                $obligatedQuery->where('sub_account_id', $subAccountId);
+            } elseif ($accountId) {
+                $obligatedQuery->where('account_id', $accountId)
+                    ->whereNull('sub_account_id');
+            }
+
+            // Exclude current OBR items if updating
+            if ($obrId) {
+                $obligatedQuery->where('obligation_request_id', '!=', $obrId);
+            }
+
+            $obligatedAmount = $obligatedQuery->sum('amount');
+            $availableAmount = $allocatedAmount - $obligatedAmount;
+
+            // Check if requested amount exceeds available
+            if ($requestedAmount > $availableAmount) {
+                $accountInfo = $subAccountId 
+                    ? \App\Models\SubAccount::find($subAccountId)?->code 
+                    : \App\Models\Account::find($accountId)?->code;
+                
+                $validator->errors()->add(
+                    "items.{$index}.amount",
+                    "Amount ₱" . number_format($requestedAmount, 2) . " exceeds available budget of ₱" . number_format($availableAmount, 2) . " for account {$accountInfo}. Another user may have created an obligation. Please refresh and try again."
+                );
+            }
+        }
+    }
 }
