@@ -34,6 +34,7 @@
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">User</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Role</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Assigned Department</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Review Statuses</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Period</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tr-lg">Actions</th>
@@ -74,6 +75,20 @@
                                     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
                                         {{ $assignment->department->code ?? 'UNK' }} - {{ $assignment->department->name ?? 'Unknown Department' }}
                                     </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-700">
+                                    @if($assignment->reviewStatuses && $assignment->reviewStatuses->count() > 0)
+                                        <div class="flex flex-wrap gap-1">
+                                            @foreach($assignment->reviewStatuses as $status)
+                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" style="background-color: {{ $status->color }}20; color: {{ $status->color }};">
+                                                    <span class="inline-block w-2 h-2 rounded-full mr-1" style="background-color: {{ $status->color }};"></span>
+                                                    {{ $status->name }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <span class="text-gray-400 text-xs italic">No statuses assigned</span>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                     @if($assignment->is_active)
@@ -116,6 +131,7 @@
                                             data-start-date="{{ $assignment->start_date ? $assignment->start_date->format('Y-m-d') : '' }}"
                                             data-end-date="{{ $assignment->end_date ? $assignment->end_date->format('Y-m-d') : '' }}"
                                             data-notes="{{ $assignment->notes }}"
+                                            data-status-ids="{{ $assignment->reviewStatuses->pluck('id')->implode(',') }}"
                                             title="Edit">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -143,6 +159,7 @@
                 
                 @if(!$hasData)
                     <tr style="display: none;">
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
@@ -275,6 +292,15 @@ function initializeModalFunctionality() {
         // Check the current department
         $(`input[name="department_ids[]"][value="${button.data('department-id')}"]`).prop('checked', true);
         
+        // Reset and set review status checkboxes
+        $('input[name="review_status_ids[]"]').prop('checked', false);
+        const statusIds = button.data('status-ids') ? button.data('status-ids').toString().split(',') : [];
+        statusIds.forEach(function(statusId) {
+            if (statusId) {
+                $(`input[name="review_status_ids[]"][value="${statusId}"]`).prop('checked', true);
+            }
+        });
+        
         $('#isActive').prop('checked', button.data('is-active') == 1);
         $('#startDate').val(button.data('start-date'));
         $('#endDate').val(button.data('end-date'));
@@ -292,6 +318,15 @@ function initializeModalFunctionality() {
 
     $('#clearAllDepts').on('click', function() {
         $('input[name="department_ids[]"]').prop('checked', false);
+    });
+
+    // Select All / Clear All for Review Statuses
+    $('#selectAllStatuses').on('click', function() {
+        $('input[name="review_status_ids[]"]').prop('checked', true);
+    });
+
+    $('#clearAllStatuses').on('click', function() {
+        $('input[name="review_status_ids[]"]').prop('checked', false);
     });
 }
 </script>
@@ -350,6 +385,38 @@ function initializeModalFunctionality() {
                 <p class="text-xs text-gray-500 mt-1">Select one or more departments to assign the user to</p>
                 <x-input-error :messages="$errors->get('department_ids')" class="mt-1" />
                 <x-input-error :messages="$errors->get('department_ids.*')" class="mt-1" />
+            </div>
+
+            <!-- Review Status Selection -->
+            <div class="mb-4">
+                <div class="flex justify-between items-center">
+                    <x-input-label value="Review Statuses (Approval Workflow)" />
+                    <div class="text-xs space-x-2">
+                        <button type="button" id="selectAllStatuses" class="text-purple-600 hover:text-purple-800">Select All</button>
+                        <span class="text-gray-400">|</span>
+                        <button type="button" id="clearAllStatuses" class="text-purple-600 hover:text-purple-800">Clear All</button>
+                    </div>
+                </div>
+                <div class="mt-1 border border-gray-300 rounded-md p-3 max-h-64 overflow-y-auto bg-gray-50">
+                    @if(isset($reviewStatuses) && $reviewStatuses instanceof \Illuminate\Support\Collection && $reviewStatuses->count() > 0)
+                        @foreach($reviewStatuses as $status)
+                            <label class="flex items-center mb-2 p-2 rounded hover:bg-white transition-colors cursor-pointer">
+                                <input type="checkbox" name="review_status_ids[]" value="{{ $status->id }}" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-500 focus:ring-purple-500">
+                                <span class="ml-3 flex items-center text-sm text-gray-700 font-medium flex-1">
+                                    <span class="inline-block w-4 h-4 rounded-full mr-2" style="background-color: {{ $status->color }};"></span>
+                                    <span class="font-bold">{{ $status->name }}</span>
+                                    <span class="ml-2 text-xs text-gray-500">({{ $status->description }})</span>
+                                </span>
+                            </label>
+                        @endforeach
+                    @endif
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                    <strong>Select which approval stages this user can handle.</strong><br>
+                    Example: Budget Staff can handle "Budget Staff Review" and "Budget Staff Approved"
+                </p>
+                <x-input-error :messages="$errors->get('review_status_ids')" class="mt-1" />
+                <x-input-error :messages="$errors->get('review_status_ids.*')" class="mt-1" />
             </div>
 
             <!-- Active Status -->

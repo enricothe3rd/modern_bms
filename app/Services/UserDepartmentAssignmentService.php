@@ -42,7 +42,7 @@ class UserDepartmentAssignmentService
         return $this->repo->find($id);
     }
 
-    public function createAssignments($userId, array $departmentIds, array $assignmentData)
+    public function createAssignments($userId, array $departmentIds, array $assignmentData, array $reviewStatusIds = [])
     {
         $createdAssignments = [];
         $existingDepartments = [];
@@ -61,6 +61,11 @@ class UserDepartmentAssignmentService
                 ...$assignmentData
             ]);
 
+            // Sync review statuses for this assignment
+            if (!empty($reviewStatusIds)) {
+                $assignment->reviewStatuses()->sync($reviewStatusIds);
+            }
+
             $createdAssignments[] = $assignment;
         }
 
@@ -70,18 +75,23 @@ class UserDepartmentAssignmentService
         ];
     }
 
-    public function updateAssignment($id, $userId, $departmentId, array $assignmentData)
+    public function updateAssignment($id, $userId, $departmentId, array $assignmentData, array $reviewStatusIds = [])
     {
         // Check if this combination already exists (excluding current record)
         if ($this->repo->existsForUserAndDepartment($userId, $departmentId, $id)) {
             throw new \Exception('This user is already assigned to this department');
         }
 
-        return $this->repo->update($id, [
+        $assignment = $this->repo->update($id, [
             'user_id' => $userId,
             'department_id' => $departmentId,
             ...$assignmentData
         ]);
+
+        // Sync review statuses for this assignment
+        $assignment->reviewStatuses()->sync($reviewStatusIds);
+
+        return $assignment;
     }
 
     public function deleteAssignment($id)

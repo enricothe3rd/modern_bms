@@ -15,6 +15,7 @@ use App\Http\Controllers\UserDepartmentAssignmentController;
 use App\Http\Controllers\ManagementController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ObligationRequestController;
+use App\Http\Controllers\ReviewStatusController;
 use App\Http\Controllers\Api\ObligationRequestApiController;
 
 Route::get('/', function () {
@@ -29,6 +30,7 @@ Route::get('/reports', function () {
 
 // Obligation Requests
 Route::resource('obligation-requests', ObligationRequestController::class)->except(['create'])->middleware('auth');
+Route::post('obligation-requests/{id}/update-status', [ObligationRequestController::class, 'updateStatus'])->name('obligation-requests.update-status')->middleware('auth');
 
 // API routes for cascading dropdowns
 Route::prefix('api/obligation-requests')->middleware('auth')->group(function () {
@@ -38,6 +40,9 @@ Route::prefix('api/obligation-requests')->middleware('auth')->group(function () 
     Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts', [ObligationRequestApiController::class, 'getAccountsByExpenseType']);
     Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts/{account}/sub-accounts', [ObligationRequestApiController::class, 'getSubAccountsByAccount']);
 });
+
+// Review Status
+Route::resource('review-statuses', ReviewStatusController::class)->middleware('auth');
 
 Route::get('/setUp', function () {
     return view('setUp.index');

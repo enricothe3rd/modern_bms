@@ -27,7 +27,14 @@
 
         <!-- Header -->
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-3xl font-extrabold text-gray-900">Obligation Requests</h2>
+            <div>
+                <h2 class="text-3xl font-extrabold text-gray-900">Obligation Requests</h2>
+                @if(!empty($userAssignedStatusIds))
+                    <p class="text-sm text-gray-600 mt-1">
+                        Showing: <span class="font-medium">My Assigned Statuses Only</span>
+                    </p>
+                @endif
+            </div>
             <button id="addObrBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition">
                 + Create OBR
             </button>
@@ -37,6 +44,33 @@
         @if(session('success'))
             <div class="bg-green-50 border-l-4 border-green-400 text-green-900 px-4 py-3 mb-6 rounded">
                 {{ session('success') }}
+            </div>
+        @endif
+
+        <!-- User Assigned Statuses Info -->
+        @if(!empty($userAssignedStatusIds))
+            <div class="bg-purple-50 border-l-4 border-purple-400 px-4 py-3 mb-6 rounded">
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 text-purple-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-purple-900">Your Assigned Review Statuses</p>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            @foreach($reviewStatuses->whereIn('id', $userAssignedStatusIds) as $status)
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium" 
+                                      style="background-color: {{ $status->color }}20; color: {{ $status->color }};">
+                                    <span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background-color: {{ $status->color }};"></span>
+                                    {{ $status->name }}
+                                </span>
+                            @endforeach
+                        </div>
+                        <p class="text-xs text-purple-700 mt-2">
+                            You can see OBRs with these statuses (to work on) and OBRs you created (to track progress). 
+                            You can only change status for OBRs with your assigned statuses.
+                        </p>
+                    </div>
+                </div>
             </div>
         @endif
 
@@ -50,26 +84,63 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Claimant Payee</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Obligation Date</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Amount</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
                     @forelse($obligationRequests as $obr)
                         <tr class="hover:bg-gray-50" data-obr-id="{{ $obr->id }}">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $obr->obr_number }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ $obr->obr_number }}
+                                @if($obr->created_by == auth()->id())
+                                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="You created this OBR">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"></path>
+                                        </svg>
+                                        Mine
+                                    </span>
+                                @endif
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $obr->department->name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $obr->claimantPayee->name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ $obr->obligation_date->format('M d, Y') }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">₱{{ number_format($obr->total_amount, 2) }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 py-1 text-xs rounded-full 
-                                    @if($obr->status === 'approved') bg-green-100 text-green-800
-                                    @elseif($obr->status === 'rejected') bg-red-100 text-red-800
-                                    @else bg-gray-100 text-gray-800
-                                    @endif">
-                                    {{ ucfirst($obr->status) }}
-                                </span>
+                                @if($obr->reviewStatus)
+                                    <select class="status-dropdown text-xs rounded-full px-3 py-1 border-0 font-medium focus:ring-2 focus:ring-offset-1 cursor-pointer"
+                                            style="background-color: {{ $obr->reviewStatus->color }}20; color: {{ $obr->reviewStatus->color }};"
+                                            data-obr-id="{{ $obr->id }}"
+                                            data-current-status="{{ $obr->review_status_id }}">
+                                        @foreach($reviewStatuses as $status)
+                                            @php
+                                                $canChangeToStatus = empty($userAssignedStatusIds) || in_array($status->id, $userAssignedStatusIds);
+                                            @endphp
+                                            <option value="{{ $status->id }}" 
+                                                    {{ $obr->review_status_id == $status->id ? 'selected' : '' }}
+                                                    {{ !$canChangeToStatus ? 'disabled' : '' }}
+                                                    data-color="{{ $status->color }}">
+                                                {{ $status->name }}{{ !$canChangeToStatus ? ' (Not Assigned)' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <select class="status-dropdown text-xs rounded-full px-3 py-1 border-0 font-medium focus:ring-2 focus:ring-offset-1 cursor-pointer bg-gray-100 text-gray-600"
+                                            data-obr-id="{{ $obr->id }}"
+                                            data-current-status="">
+                                        <option value="">Select Status</option>
+                                        @foreach($reviewStatuses as $status)
+                                            @php
+                                                $canChangeToStatus = empty($userAssignedStatusIds) || in_array($status->id, $userAssignedStatusIds);
+                                            @endphp
+                                            <option value="{{ $status->id }}" 
+                                                    {{ !$canChangeToStatus ? 'disabled' : '' }}
+                                                    data-color="{{ $status->color }}">
+                                                {{ $status->name }}{{ !$canChangeToStatus ? ' (Not Assigned)' : '' }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div class="flex gap-2">
@@ -1290,6 +1361,82 @@
             budgetSummary.classList.add('hidden');
             refreshBudgetBtn.classList.add('hidden');
         }
+    }
+
+    // Handle status dropdown change
+    $(document).on('change', '.status-dropdown', function() {
+        const dropdown = $(this);
+        const obrId = dropdown.data('obr-id');
+        const newStatusId = dropdown.val();
+        const currentStatusId = dropdown.data('current-status');
+        const selectedOption = dropdown.find('option:selected');
+        const newColor = selectedOption.data('color');
+
+        if (!newStatusId) {
+            return;
+        }
+
+        // Confirm status change
+        if (!confirm('Are you sure you want to change the review status?')) {
+            dropdown.val(currentStatusId);
+            return;
+        }
+
+        // Show loading state
+        dropdown.prop('disabled', true);
+
+        // Send AJAX request to update status
+        $.ajax({
+            url: `/obligation-requests/${obrId}/update-status`,
+            method: 'POST',
+            data: {
+                _token: '{{ csrf_token() }}',
+                review_status_id: newStatusId
+            },
+            success: function(response) {
+                console.log('✅ Status updated successfully:', response);
+                
+                // Update dropdown styling
+                dropdown.css({
+                    'background-color': newColor + '20',
+                    'color': newColor
+                });
+                dropdown.data('current-status', newStatusId);
+                
+                // Show success notification
+                showNotification('Status updated successfully!', 'success');
+                
+                dropdown.prop('disabled', false);
+            },
+            error: function(xhr) {
+                console.error('❌ Error updating status:', xhr);
+                
+                // Revert dropdown
+                dropdown.val(currentStatusId);
+                dropdown.prop('disabled', false);
+                
+                // Show error notification
+                const errorMsg = xhr.responseJSON?.message || 'Failed to update status';
+                showNotification(errorMsg, 'error');
+            }
+        });
+    });
+
+    // Notification helper
+    function showNotification(message, type = 'success') {
+        const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+        const notification = $(`
+            <div class="fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+                ${message}
+            </div>
+        `);
+        
+        $('body').append(notification);
+        
+        setTimeout(() => {
+            notification.addClass('animate-fade-out');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
     </script>
     @endpush

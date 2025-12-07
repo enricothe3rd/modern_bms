@@ -64,4 +64,22 @@ class UserDepartmentAssignment extends Model
     {
         return $query->where('department_id', $departmentId);
     }
+
+    /**
+     * Get the status assignments for this user-department combination
+     */
+    public function statusAssignments()
+    {
+        return $this->hasMany(UserDepartmentStatusAssignment::class);
+    }
+
+    /**
+     * Get the review statuses assigned to this user-department combination
+     */
+    public function reviewStatuses()
+    {
+        return $this->belongsToMany(ReviewStatus::class, 'user_department_status_assignments')
+            ->withPivot('can_approve', 'can_reject', 'is_active')
+            ->withTimestamps();
+    }
 }

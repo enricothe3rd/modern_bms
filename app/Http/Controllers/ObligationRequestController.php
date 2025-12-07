@@ -32,20 +32,53 @@ class ObligationRequestController extends Controller
         $this->fundTypeRepo = $fundTypeRepo;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $obligationRequests = $this->service->getAllObligationRequests();
+        $user = auth()->user();
+        
+        // Get current user's assigned review statuses
+        $userAssignedStatusIds = [];
+        if ($user && method_exists($user, 'departmentAssignments')) {
+            $userAssignedStatusIds = $user->departmentAssignments()
+                ->with('reviewStatuses')
+                ->get()
+                ->pluck('reviewStatuses')
+                ->flatten()
+                ->pluck('id')
+                ->unique()
+                ->toArray();
+        }
+        
+        // Filter obligation requests:
+        // - Super admin sees all
+        // - Users see OBRs with their assigned statuses OR OBRs they created (to track progress)
+        if ($user->isSuperAdmin()) {
+            $obligationRequests = $this->service->getAllObligationRequests();
+        } elseif (empty($userAssignedStatusIds)) {
+            // Users with no assignments see only their own OBRs
+            $obligationRequests = $this->service->getObligationRequestsByCreator($user->id);
+        } else {
+            // Users see OBRs with assigned statuses OR OBRs they created
+            $obligationRequests = $this->service->getObligationRequestsByStatuses($userAssignedStatusIds, $user->id);
+        }
+        
         $departments = $this->departmentRepo->all();
         $claimantPayees = $this->claimantPayeeRepo->all();
         $users = $this->userRepo->all();
         $fundTypes = $this->fundTypeRepo->all();
+        
+        // Show all statuses so users can see the full workflow
+        // But only assigned statuses will be changeable
+        $reviewStatuses = \App\Models\ReviewStatus::active()->ordered()->get();
 
         return view('obligation-requests.index', compact(
             'obligationRequests',
             'departments',
             'claimantPayees',
             'users',
-            'fundTypes'
+            'fundTypes',
+            'reviewStatuses',
+            'userAssignedStatusIds'
         ));
     }
 
@@ -125,5 +158,50 @@ class ObligationRequestController extends Controller
 
         return redirect()->route('obligation-requests.index')
             ->with('success', 'Obligation Request deleted successfully!');
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'review_status_id' => 'required|exists:review_statuses,id'
+        ]);
+
+        $user = auth()->user();
+        
+        // Get user's assigned status IDs
+        $userAssignedStatusIds = [];
+        if ($user && method_exists($user, 'departmentAssignments')) {
+            $userAssignedStatusIds = $user->departmentAssignments()
+                ->with('reviewStatuses')
+                ->get()
+                ->pluck('reviewStatuses')
+                ->flatten()
+                ->pluck('id')
+                ->unique()
+                ->toArray();
+        }
+        
+        // Check if user is allowed to change to this status (unless super admin)
+        if (!$user->isSuperAdmin() && !in_array($request->review_status_id, $userAssignedStatusIds)) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not authorized to change to this status'
+                ], 403);
+            }
+            return redirect()->back()->with('error', 'You are not authorized to change to this status');
+        }
+
+        $obr = $this->service->updateReviewStatus($id, $request->review_status_id);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Status updated successfully',
+                'obr' => $obr->load('reviewStatus')
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Status updated successfully!');
     }
 }

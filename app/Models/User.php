@@ -69,6 +69,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get all department assignments for this user.
+     */
+    public function departmentAssignments()
+    {
+        return $this->hasMany(UserDepartmentAssignment::class);
+    }
+
+    /**
      * Check if user is super admin
      */
     public function isSuperAdmin()

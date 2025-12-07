@@ -21,6 +21,46 @@ class ObligationRequestService
         return $this->repo->all();
     }
 
+    public function getObligationRequestsByStatuses(array $statusIds, $userId = null)
+    {
+        return $this->repo->getByStatusesOrCreatedBy($statusIds, $userId);
+    }
+
+    public function getObligationRequestsByCreator($userId)
+    {
+        return $this->repo->getByCreator($userId);
+    }
+
+    public function getAllObligationRequestsOld($filterByUserStatuses = false)
+    {
+        if ($filterByUserStatuses) {
+            $user = auth()->user();
+            
+            // Get user's assigned review status IDs
+            $userStatusIds = [];
+            if ($user && method_exists($user, 'departmentAssignments')) {
+                $userStatusIds = $user->departmentAssignments()
+                    ->with('reviewStatuses')
+                    ->get()
+                    ->pluck('reviewStatuses')
+                    ->flatten()
+                    ->pluck('id')
+                    ->unique()
+                    ->toArray();
+            }
+            
+            // If user has assigned statuses, filter by them
+            if (!empty($userStatusIds)) {
+                return $this->repo->getByReviewStatuses($userStatusIds);
+            }
+            
+            // If no statuses assigned, return empty collection
+            return collect([]);
+        }
+        
+        return $this->repo->all();
+    }
+
     public function findObligationRequest($id)
     {
         return $this->repo->find($id);
@@ -29,6 +69,9 @@ class ObligationRequestService
     public function createObligationRequest(array $data)
     {
         return DB::transaction(function () use ($data) {
+            // Get default review status (Draft)
+            $defaultStatus = \App\Models\ReviewStatus::where('code', 'draft')->first();
+            
             // Create main OBR
             $obr = $this->repo->create([
                 'obr_number' => $data['obr_number'],
@@ -39,6 +82,8 @@ class ObligationRequestService
                 'optional_field_1' => $data['optional_field_1'] ?? null,
                 'optional_field_2' => $data['optional_field_2'] ?? null,
                 'status' => $data['status'] ?? 'draft',
+                'review_status_id' => $defaultStatus ? $defaultStatus->id : null,
+                'created_by' => auth()->id(),
             ]);
 
             // Create signatories
@@ -217,5 +262,17 @@ class ObligationRequestService
         event(new \App\Events\ObligationRequestDeleted($id, $obrNumber));
         
         return $result;
+    }
+
+    public function updateReviewStatus($id, $reviewStatusId)
+    {
+        $obr = $this->repo->update($id, [
+            'review_status_id' => $reviewStatusId
+        ]);
+
+        // Broadcast event for real-time updates
+        event(new \App\Events\ObligationRequestUpdated($obr));
+
+        return $obr;
     }
 }

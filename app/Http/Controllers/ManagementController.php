@@ -137,6 +137,15 @@ class ManagementController extends Controller
                 'color' => 'sky',
                 'count' => \App\Models\ClaimantPayee::count(),
                 'permission' => 'manage_payees'
+            ],
+            [
+                'label' => 'Review Statuses',
+                'description' => 'Manage workflow review statuses for obligation requests',
+                'icon' => 'check-circle',
+                'route' => 'review-statuses.index',
+                'color' => 'violet',
+                'count' => \App\Models\ReviewStatus::count(),
+                'permission' => 'manage_departments'
             ]
         ];
 

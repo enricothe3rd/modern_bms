@@ -28,7 +28,9 @@ class UserDepartmentAssignmentRequest extends FormRequest
             'is_active' => 'boolean',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'notes' => 'nullable|string|max:1000'
+            'notes' => 'nullable|string|max:1000',
+            'review_status_ids' => 'nullable|array',
+            'review_status_ids.*' => 'exists:review_statuses,id'
         ];
 
         if ($isUpdate) {
@@ -66,6 +68,8 @@ class UserDepartmentAssignmentRequest extends FormRequest
             'end_date.date' => 'Please enter a valid end date.',
             'end_date.after_or_equal' => 'The end date must be after or equal to the start date.',
             'notes.max' => 'Notes may not be greater than 1000 characters.',
+            'review_status_ids.array' => 'Review statuses must be an array.',
+            'review_status_ids.*.exists' => 'One or more selected review statuses do not exist.',
         ];
     }
 }

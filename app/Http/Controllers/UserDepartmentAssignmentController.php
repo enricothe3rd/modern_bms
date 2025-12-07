@@ -20,12 +20,13 @@ class UserDepartmentAssignmentController extends Controller
         $userDepartmentAssignments = $this->service->getAllAssignmentsGroupedByUser();
         $users = $this->service->getAllUsers();
         $departments = $this->service->getAllDepartments();
+        $reviewStatuses = \App\Models\ReviewStatus::active()->ordered()->get();
 
         if ($request->wantsJson()) {
             return response()->json(['data' => $userDepartmentAssignments]);
         }
 
-        return view('user-department-assignments.index', compact('userDepartmentAssignments', 'users', 'departments'));
+        return view('user-department-assignments.index', compact('userDepartmentAssignments', 'users', 'departments', 'reviewStatuses'));
     }
 
     public function store(UserDepartmentAssignmentRequest $request)
@@ -42,7 +43,8 @@ class UserDepartmentAssignmentController extends Controller
         $result = $this->service->createAssignments(
             $validated['user_id'],
             $validated['department_ids'],
-            $assignmentData
+            $assignmentData,
+            $validated['review_status_ids'] ?? []
         );
 
         $createdAssignments = $result['created'];
@@ -80,8 +82,9 @@ class UserDepartmentAssignmentController extends Controller
         $userDepartmentAssignments = $this->service->getAllAssignmentsGroupedByUser();
         $users = $this->service->getAllUsers();
         $departments = $this->service->getAllDepartments();
+        $reviewStatuses = \App\Models\ReviewStatus::active()->ordered()->get();
 
-        return view('user-department-assignments.index', compact('userDepartmentAssignments', 'users', 'departments', 'userDepartmentAssignment'));
+        return view('user-department-assignments.index', compact('userDepartmentAssignments', 'users', 'departments', 'reviewStatuses', 'userDepartmentAssignment'));
     }
 
     public function update(UserDepartmentAssignmentRequest $request, $id)
@@ -103,7 +106,8 @@ class UserDepartmentAssignmentController extends Controller
                 $id,
                 $validated['user_id'],
                 $departmentId,
-                $assignmentData
+                $assignmentData,
+                $validated['review_status_ids'] ?? []
             );
 
             if ($request->wantsJson()) {

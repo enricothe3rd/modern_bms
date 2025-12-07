@@ -19,6 +19,8 @@ class ObligationRequest extends Model
         'optional_field_2',
         'total_amount',
         'status',
+        'review_status_id',
+        'created_by',
     ];
 
     protected $casts = [
@@ -59,5 +61,15 @@ class ObligationRequest extends Model
     public function notedSignatory()
     {
         return $this->hasOne(ObligationRequestSignatory::class)->where('signatory_type', 'noted');
+    }
+
+    public function reviewStatus()
+    {
+        return $this->belongsTo(ReviewStatus::class);
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }
