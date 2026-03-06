@@ -31,10 +31,34 @@ class ObligationRequestApiController extends Controller
      */
     public function getExpenseTypesByDepartment($fundTypeId, $departmentId)
     {
-        // Get expense types allocated to this department
-        $expenseTypes = ExpenseType::whereHas('departments', function ($query) use ($departmentId) {
-            $query->where('departments.id', $departmentId);
+        // Get fiscal year ID from request parameter
+        $fiscalYearId = request('fiscal_year_id');
+        
+        \Log::info('getExpenseTypesByDepartment called', [
+            'fund_type_id' => $fundTypeId,
+            'department_id' => $departmentId,
+            'fiscal_year_id' => $fiscalYearId
+        ]);
+        
+        if (!$fiscalYearId) {
+            // Fallback to current fiscal year if not provided
+            $currentFiscalYear = \App\Models\FiscalYear::where('is_current', true)->first();
+            $fiscalYearId = $currentFiscalYear ? $currentFiscalYear->id : null;
+            \Log::info('Using fallback fiscal year', ['fiscal_year_id' => $fiscalYearId]);
+        }
+        
+        if (!$fiscalYearId) {
+            \Log::warning('No fiscal year found, returning empty array');
+            return response()->json([]);
+        }
+        
+        // Get expense types that have allocations for this department in the selected fiscal year
+        $expenseTypes = ExpenseType::whereHas('departmentExpenseTypeAllocations', function ($query) use ($departmentId, $fiscalYearId) {
+            $query->where('department_id', $departmentId)
+                  ->where('fiscal_year_id', $fiscalYearId);
         })->orderBy('description')->get();
+
+        \Log::info('Found expense types', ['count' => $expenseTypes->count()]);
 
         return response()->json($expenseTypes);
     }
@@ -45,19 +69,29 @@ class ObligationRequestApiController extends Controller
      */
     public function getAccountsByExpenseType($fundTypeId, $departmentId, $expenseTypeId)
     {
-        // Get current year or use request parameter
-        $year = request('year', date('Y'));
+        // Get fiscal year ID from request parameter
+        $fiscalYearId = request('fiscal_year_id');
         
-        // Get all allocations for this department + expense type combination for the specified year
+        if (!$fiscalYearId) {
+            // Fallback to current fiscal year if not provided
+            $currentFiscalYear = \App\Models\FiscalYear::where('is_current', true)->first();
+            $fiscalYearId = $currentFiscalYear ? $currentFiscalYear->id : null;
+        }
+        
+        if (!$fiscalYearId) {
+            return response()->json([]);
+        }
+        
+        // Get all allocations for this department + expense type combination for the specified fiscal year
         $allocations = \App\Models\DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
             ->where('expense_type_id', $expenseTypeId)
-            ->where('year', $year)
+            ->where('fiscal_year_id', $fiscalYearId)
             ->with(['account', 'subAccount.account'])
             ->get();
 
         // Calculate obligated amounts for accounts
-        $accountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
-                $query->whereYear('obligation_date', $year);
+        $accountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($fiscalYearId) {
+                $query->where('fiscal_year_id', $fiscalYearId);
             })
             ->where('department_id', $departmentId)
             ->where('expense_type_id', $expenseTypeId)
@@ -68,8 +102,8 @@ class ObligationRequestApiController extends Controller
             ->pluck('total_obligated', 'account_id');
 
         // Calculate obligated amounts for sub-accounts
-        $subAccountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
-                $query->whereYear('obligation_date', $year);
+        $subAccountObligations = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($fiscalYearId) {
+                $query->where('fiscal_year_id', $fiscalYearId);
             })
             ->where('department_id', $departmentId)
             ->where('expense_type_id', $expenseTypeId)
@@ -176,6 +210,33 @@ class ObligationRequestApiController extends Controller
         })->unique('id')->values();
 
         return response()->json($subAccounts);
+    }
+
+    /**
+     * Get expense types by department only (fallback when fund type is not selected)
+     */
+    public function getExpenseTypesByDepartmentOnly($departmentId)
+    {
+        // Get fiscal year ID from request parameter
+        $fiscalYearId = request('fiscal_year_id');
+        
+        if (!$fiscalYearId) {
+            // Fallback to current fiscal year if not provided
+            $currentFiscalYear = \App\Models\FiscalYear::where('is_current', true)->first();
+            $fiscalYearId = $currentFiscalYear ? $currentFiscalYear->id : null;
+        }
+        
+        if (!$fiscalYearId) {
+            return response()->json([]);
+        }
+        
+        // Get expense types that have allocations for this department in the selected fiscal year (regardless of fund type)
+        $expenseTypes = ExpenseType::whereHas('departmentExpenseTypeAllocations', function ($query) use ($departmentId, $fiscalYearId) {
+            $query->where('department_id', $departmentId)
+                  ->where('fiscal_year_id', $fiscalYearId);
+        })->orderBy('description')->get();
+
+        return response()->json($expenseTypes);
     }
 
     /**

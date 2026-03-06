@@ -18,6 +18,7 @@ class ObligationRequestRequest extends FormRequest
         return [
             'obr_number' => 'required|string|max:255|unique:obligation_requests,obr_number,' . $obrId,
             'department_id' => 'required|exists:departments,id',
+            'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'claimant_payee_id' => 'required|exists:claimant_payees,id',
             'obligation_date' => 'required|date',
             'particulars' => 'required|string',
@@ -30,7 +31,6 @@ class ObligationRequestRequest extends FormRequest
             'noted_signatory_id' => 'nullable|exists:users,id',
             'noted_signatory_date' => 'nullable|date',
             'fund_type_id' => 'nullable|exists:fund_types,id',
-            'budget_year' => 'nullable|integer|min:2020|max:' . (date('Y') + 5),
             'items' => 'required|array|min:1',
             'items.*.department_id' => 'required|exists:departments,id',
             'items.*.expense_type_id' => 'required|exists:expense_types,id',
@@ -46,6 +46,7 @@ class ObligationRequestRequest extends FormRequest
             'obr_number.required' => 'OBR number is required.',
             'obr_number.unique' => 'This OBR number already exists.',
             'department_id.required' => 'Please select a responsibility center.',
+            'fiscal_year_id.required' => 'Please select a fiscal year.',
             'claimant_payee_id.required' => 'Please select a claimant payee.',
             'obligation_date.required' => 'Obligation date is required.',
             'particulars.required' => 'Particulars are required.',
@@ -76,9 +77,12 @@ class ObligationRequestRequest extends FormRequest
             return;
         }
 
-        $obligationDate = $this->obligation_date;
-        $year = date('Y', strtotime($obligationDate));
+        $fiscalYearId = $this->fiscal_year_id;
         $obrId = $this->route('obligation_request'); // For updates, exclude current OBR
+
+        if (!$fiscalYearId) {
+            return; // Skip validation if no fiscal year selected
+        }
 
         foreach ($this->items as $index => $item) {
             if (!isset($item['department_id']) || !isset($item['expense_type_id'])) {
@@ -94,7 +98,7 @@ class ObligationRequestRequest extends FormRequest
             // Get allocated amount
             $allocation = \App\Models\DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
                 ->where('expense_type_id', $expenseTypeId)
-                ->where('year', $year);
+                ->where('fiscal_year_id', $fiscalYearId);
 
             if ($subAccountId) {
                 $allocation->where('sub_account_id', $subAccountId);
@@ -110,14 +114,14 @@ class ObligationRequestRequest extends FormRequest
             if ($allocatedAmount == 0) {
                 $validator->errors()->add(
                     "items.{$index}.amount",
-                    "No budget allocation found for this account in year {$year}."
+                    "No budget allocation found for this account in the selected fiscal year."
                 );
                 continue;
             }
 
             // Calculate already obligated amount (excluding current OBR if updating)
-            $obligatedQuery = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($year) {
-                    $query->whereYear('obligation_date', $year);
+            $obligatedQuery = \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($fiscalYearId) {
+                    $query->where('fiscal_year_id', $fiscalYearId);
                 })
                 ->where('department_id', $departmentId)
                 ->where('expense_type_id', $expenseTypeId);

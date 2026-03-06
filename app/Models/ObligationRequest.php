@@ -12,6 +12,7 @@ class ObligationRequest extends Model
     protected $fillable = [
         'obr_number',
         'department_id',
+        'fiscal_year_id',
         'claimant_payee_id',
         'obligation_date',
         'particulars',
@@ -31,6 +32,11 @@ class ObligationRequest extends Model
     public function department()
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function fiscalYear()
+    {
+        return $this->belongsTo(FiscalYear::class);
     }
 
     public function claimantPayee()

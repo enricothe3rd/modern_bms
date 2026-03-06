@@ -6,13 +6,17 @@ use App\Models\DepartmentExpenseTypeAllocation;
 
 class DepartmentExpenseTypeAllocationRepository
 {
-    public function getAllByDepartmentAndExpenseType($departmentId, $expenseTypeId)
+    public function getAllByDepartmentAndExpenseType($departmentId, $expenseTypeId, $fiscalYearId = null)
     {
-        return DepartmentExpenseTypeAllocation::with(['account', 'subAccount'])
+        $query = DepartmentExpenseTypeAllocation::with(['account', 'subAccount', 'fiscalYear'])
             ->where('department_id', $departmentId)
-            ->where('expense_type_id', $expenseTypeId)
-            ->orderBy('year', 'desc')
-            ->get();
+            ->where('expense_type_id', $expenseTypeId);
+            
+        if ($fiscalYearId) {
+            $query->where('fiscal_year_id', $fiscalYearId);
+        }
+        
+        return $query->orderByDesc('fiscal_year_id')->get();
     }
 
     public function find($id)
@@ -27,11 +31,11 @@ class DepartmentExpenseTypeAllocationRepository
             ->findOrFail($allocationId);
     }
 
-    public function checkDuplicateAllocation($departmentId, $expenseTypeId, $year, $accountId, $subAccountId, $excludeId = null)
+    public function checkDuplicateAllocation($departmentId, $expenseTypeId, $fiscalYearId, $accountId, $subAccountId, $excludeId = null)
     {
         $query = DepartmentExpenseTypeAllocation::where('department_id', $departmentId)
             ->where('expense_type_id', $expenseTypeId)
-            ->where('year', $year)
+            ->where('fiscal_year_id', $fiscalYearId)
             ->where('account_id', $accountId)
             ->where('sub_account_id', $subAccountId);
 

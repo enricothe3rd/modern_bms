@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
         
         // Seed roles
         $this->call(RoleSeeder::class);
+
+        // Seed super admin role and user
+        $this->call(SuperAdminSeeder::class);
         
         // Seed users with roles and departments
         $this->call(UserSeeder::class);

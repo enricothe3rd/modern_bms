@@ -66,6 +66,7 @@ class ObligationRequestController extends Controller
         $claimantPayees = $this->claimantPayeeRepo->all();
         $users = $this->userRepo->all();
         $fundTypes = $this->fundTypeRepo->all();
+        $fiscalYears = \App\Models\FiscalYear::where('is_active', true)->orderBy('year', 'desc')->get();
         
         // Show all statuses so users can see the full workflow
         // But only assigned statuses will be changeable
@@ -77,6 +78,7 @@ class ObligationRequestController extends Controller
             'claimantPayees',
             'users',
             'fundTypes',
+            'fiscalYears',
             'reviewStatuses',
             'userAssignedStatusIds'
         ));
@@ -102,7 +104,39 @@ class ObligationRequestController extends Controller
             return response()->json($obr);
         }
 
+        // Check if PDF generation is requested
+        if (request()->get('format') === 'pdf') {
+            return $this->generatePdf($obr);
+        }
+
         return view('obligation-requests.show', compact('obr'));
+    }
+
+    /**
+     * Generate PDF for obligation request
+     */
+    public function generatePdf($obr)
+    {
+        $pdf = \App\Services\PdfTemplateBuilder::create('obligation_request', [
+            'obr' => $obr,
+            'organization' => env('PDF_ORGANIZATION_NAME', config('app.name')),
+            'address' => env('PDF_ORGANIZATION_ADDRESS', 'Your Organization Address'),
+            'logo_path' => env('PDF_LOGO_PATH', null)
+        ]);
+
+        $filename = 'OBR_' . $obr->obr_number . '.pdf';
+        
+        // Check if action parameter is provided
+        $action = request()->get('action', 'view'); // default to view
+        
+        switch ($action) {
+            case 'download':
+                return $pdf->download($filename);
+            case 'view':
+            case 'inline':
+            default:
+                return $pdf->inline($filename);
+        }
     }
 
     public function edit($id)
@@ -115,7 +149,7 @@ class ObligationRequestController extends Controller
                 'obr' => $obr,
                 'signatories' => $obr->signatories,
                 'items' => $obr->items,
-                'budget_year' => date('Y') // Default to current year, can be enhanced later
+                'fiscal_year_id' => $obr->fiscal_year_id
             ]);
         }
 

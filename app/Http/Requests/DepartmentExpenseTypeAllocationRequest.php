@@ -33,7 +33,7 @@ class DepartmentExpenseTypeAllocationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'year' => 'required|integer|min:2020|max:' . (date('Y') + 5),
+            'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'account_type' => 'required|in:account,sub_account',
             'account_id' => 'required_if:account_type,account|nullable|exists:accounts,id',
             'sub_account_id' => 'required_if:account_type,sub_account|nullable|exists:sub_accounts,id',
@@ -48,10 +48,8 @@ class DepartmentExpenseTypeAllocationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'year.required' => 'The year field is required.',
-            'year.integer' => 'The year must be a valid integer.',
-            'year.min' => 'The year must be at least 2020.',
-            'year.max' => 'The year cannot be more than ' . (date('Y') + 5) . '.',
+            'fiscal_year_id.required' => 'Please select a fiscal year.',
+            'fiscal_year_id.exists' => 'The selected fiscal year is invalid.',
             'account_type.required' => 'Please select an account type.',
             'account_id.required_if' => 'Please select an account.',
             'sub_account_id.required_if' => 'Please select a sub-account.',

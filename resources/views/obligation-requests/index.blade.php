@@ -331,15 +331,15 @@
                                 </select>
                             </div>
                             <div>
-                                <x-input-label value="Budget Year" />
-                                <select name="budget_year" id="budgetYearInput" class="mt-1 block w-full border border-neutral-300 rounded-lg px-4 py-2">
-                                    @php
-                                        $currentYear = date('Y');
-                                        $startYear = 2020;
-                                    @endphp
-                                    @for($year = $currentYear + 1; $year >= $startYear; $year--)
-                                        <option value="{{ $year }}" {{ $year == $currentYear ? 'selected' : '' }}>{{ $year }}</option>
-                                    @endfor
+                                <x-input-label value="Fiscal Year" />
+                                <select name="fiscal_year_id" id="fiscalYearInput" class="mt-1 block w-full border border-neutral-300 rounded-lg px-4 py-2">
+                                    <option value="">Select Fiscal Year</option>
+                                    @foreach($fiscalYears as $fiscalYear)
+                                        <option value="{{ $fiscalYear->id }}" {{ $fiscalYear->is_current ? 'selected' : '' }}>
+                                            {{ $fiscalYear->year }}
+                                            @if($fiscalYear->is_current) (Current) @endif
+                                        </option>
+                                    @endforeach
                                 </select>
                             </div>
                         </div>
@@ -861,7 +861,7 @@
                 if (firstItem && firstItem.fund_type_id) {
                     document.getElementById('fundTypeInput').value = firstItem.fund_type_id;
                 }
-                document.getElementById('budgetYearInput').value = data.budget_year || new Date().getFullYear();
+                document.getElementById('fiscalYearInput').value = data.fiscal_year_id || '';
                 
                 // Clear and populate items
                 itemsContainer.innerHTML = '';
@@ -900,8 +900,8 @@
                         expSelect.value = item.expense_type_id;
                         
                         // Load and set account
-                        const budgetYear = document.getElementById('budgetYearInput').value;
-                        const accRes = await fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${item.department_id}/expense-types/${item.expense_type_id}/accounts?year=${budgetYear}`);
+                        const fiscalYearId = document.getElementById('fiscalYearInput').value;
+                        const accRes = await fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${item.department_id}/expense-types/${item.expense_type_id}/accounts?fiscal_year_id=${fiscalYearId}`);
                         const accounts = await accRes.json();
                         const accSelect = row.querySelector('.account-select');
                         populateAccountDropdown(accSelect, accounts);
@@ -959,7 +959,7 @@
     const refreshBudgetBtn = document.getElementById('refreshBudgetBtn');
     refreshBudgetBtn.addEventListener('click', async function() {
         const fundTypeId = document.getElementById('fundTypeInput').value;
-        const budgetYear = document.getElementById('budgetYearInput').value;
+        const fiscalYearId = document.getElementById('fiscalYearInput').value;
         
         if (!fundTypeId) {
             alert('Please select a fund type first.');
@@ -1147,9 +1147,9 @@
         });
     });
 
-    // Budget Year change -> Reload accounts for all items that have expense type selected
-    const budgetYearInput = document.getElementById('budgetYearInput');
-    budgetYearInput.addEventListener('change', function() {
+    // Fiscal Year change -> Reload accounts for all items that have expense type selected
+    const fiscalYearInput = document.getElementById('fiscalYearInput');
+    fiscalYearInput.addEventListener('change', function() {
         // Reload accounts for each item that has expense type selected
         document.querySelectorAll('.item-row').forEach(row => {
             const fundTypeId = document.getElementById('fundTypeInput').value;
@@ -1210,8 +1210,8 @@
             const accountSelect = row.querySelector('.account-select');
             
             if (fundTypeId && deptId && expenseTypeId) {
-                const budgetYear = document.getElementById('budgetYearInput').value;
-                fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${deptId}/expense-types/${expenseTypeId}/accounts?year=${budgetYear}`)
+                const fiscalYearId = document.getElementById('fiscalYearInput').value;
+                fetch(`/api/obligation-requests/fund-types/${fundTypeId}/departments/${deptId}/expense-types/${expenseTypeId}/accounts?fiscal_year_id=${fiscalYearId}`)
                     .then(res => res.json())
                     .then(data => {
                         populateAccountDropdown(accountSelect, data);

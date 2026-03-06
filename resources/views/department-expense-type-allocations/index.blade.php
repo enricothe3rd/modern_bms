@@ -44,18 +44,26 @@
     <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
             <h3 class="text-xl font-bold text-gray-900">Budget Allocations</h3>
-            <div>
-                <label for="yearFilter" class="text-sm font-medium text-gray-700 mr-2">Year:</label>
-                <select id="yearFilter" class="border border-gray-300 rounded-lg px-3 py-1 text-sm">
-                    <option value="">All Years</option>
-                    @php
-                        $currentYear = date('Y');
-                        $startYear = 2020;
-                    @endphp
-                    @for($year = $currentYear + 1; $year >= $startYear; $year--)
-                        <option value="{{ $year }}" {{ $year == $currentYear ? 'selected' : '' }}>{{ $year }}</option>
-                    @endfor
-                </select>
+            <div class="flex items-center gap-4">
+                <!-- Fiscal Year Filter -->
+                <div>
+                    <label for="fiscalYearFilter" class="text-sm font-medium text-gray-700 mr-2">Fiscal Year:</label>
+                    <select id="fiscalYearFilter" class="border border-gray-300 rounded-lg px-3 py-1 text-sm" onchange="filterByFiscalYear()">
+                        <option value="">All Fiscal Years</option>
+                        @foreach($fiscalYears as $fy)
+                            <option value="{{ $fy->id }}" {{ $selectedFiscalYear && $selectedFiscalYear->id == $fy->id ? 'selected' : '' }}>
+                                {{ $fy->year }} {{ $fy->is_current ? '(Current)' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                @if($selectedFiscalYear)
+                    <div class="text-sm text-gray-600">
+                        <span class="font-medium">{{ $selectedFiscalYear->description }}</span>
+                        <span class="text-gray-400">•</span>
+                        <span>{{ $selectedFiscalYear->start_date->format('M d, Y') }} - {{ $selectedFiscalYear->end_date->format('M d, Y') }}</span>
+                    </div>
+                @endif
             </div>
         </div>
         @if($allocations->count() > 0)
@@ -71,7 +79,7 @@
         <table id="allocationTable" class="min-w-full divide-y divide-gray-200">
             <thead class="bg-indigo-50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Year</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider rounded-tl-lg">Fiscal Year</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Account Type</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Account</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-indigo-700 uppercase tracking-wider">Description</th>
@@ -81,11 +89,21 @@
             </thead>
             <tbody class="bg-white divide-y divide-gray-100">
                 @foreach($allocations as $allocation)
-                    <tr class="hover:bg-gray-50 transition duration-150 ease-in-out" data-year="{{ $allocation->year }}">
+                    <tr class="hover:bg-gray-50 transition duration-150 ease-in-out" data-year="{{ $allocation->year }}" data-fiscal-year-id="{{ $allocation->fiscal_year_id }}">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2 py-1 rounded-md text-sm font-semibold bg-gray-100 text-gray-800">
-                                {{ $allocation->year }}
-                            </span>
+                            <div class="flex items-center">
+                                <span class="inline-flex items-center px-2 py-1 rounded-md text-sm font-semibold bg-gray-100 text-gray-800">
+                                    {{ $allocation->fiscalYear ? $allocation->fiscalYear->year : $allocation->year }}
+                                </span>
+                                @if($allocation->fiscalYear && $allocation->fiscalYear->is_current)
+                                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Current
+                                    </span>
+                                @endif
+                            </div>
+                            @if($allocation->fiscalYear && $allocation->fiscalYear->description)
+                                <div class="text-xs text-gray-500 mt-1">{{ $allocation->fiscalYear->description }}</div>
+                            @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {{ $allocation->account_type === 'account' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }} uppercase">
@@ -116,6 +134,7 @@
                                 {{-- Edit Button with Icon --}}
                                 <button class="editBtn text-yellow-500 hover:text-yellow-600 p-1 rounded-full hover:bg-yellow-50 transition duration-150 ease-in-out"
                                     data-id="{{ $allocation->id }}"
+                                    data-fiscal-year-id="{{ $allocation->fiscal_year_id }}"
                                     data-year="{{ $allocation->year }}"
                                     data-account-type="{{ $allocation->account_type }}"
                                     data-account-id="{{ $allocation->account_id }}"
@@ -243,6 +262,20 @@ $(document).ready(function() {
     $('.paginate_button.current').addClass('bg-indigo-600 text-white hover:bg-indigo-700').removeClass('bg-indigo-50 text-indigo-600');
     $('.paginate_button.disabled').addClass('opacity-50 cursor-not-allowed text-gray-400 border-gray-200').removeClass('text-indigo-600 border-indigo-200');
 });
+
+// Function to filter by fiscal year
+function filterByFiscalYear() {
+    const fiscalYearId = document.getElementById('fiscalYearFilter').value;
+    const currentUrl = new URL(window.location);
+    
+    if (fiscalYearId) {
+        currentUrl.searchParams.set('fiscal_year_id', fiscalYearId);
+    } else {
+        currentUrl.searchParams.delete('fiscal_year_id');
+    }
+    
+    window.location.href = currentUrl.toString();
+}
 </script>
 @endpush
 
@@ -264,19 +297,18 @@ $(document).ready(function() {
 
             <!-- Single Allocation Form -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <!-- Year -->
+                <!-- Fiscal Year -->
                 <div>
-                    <x-input-label value="Year" />
-                    <select name="year" id="yearInput" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
-                        @php
-                            $currentYear = date('Y');
-                            $startYear = 2020;
-                        @endphp
-                        @for($year = $currentYear + 1; $year >= $startYear; $year--)
-                            <option value="{{ $year }}" {{ $year == $currentYear ? 'selected' : '' }}>{{ $year }}</option>
-                        @endfor
+                    <x-input-label value="Fiscal Year" />
+                    <select name="fiscal_year_id" id="fiscalYearInput" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        <option value="">Select Fiscal Year</option>
+                        @foreach($fiscalYears as $fy)
+                            <option value="{{ $fy->id }}" {{ $currentFiscalYear && $currentFiscalYear->id == $fy->id ? 'selected' : '' }}>
+                                {{ $fy->year }} - {{ $fy->description }} {{ $fy->is_current ? '(Current)' : '' }}
+                            </option>
+                        @endforeach
                     </select>
-                    <x-input-error :messages="$errors->get('year')" class="mt-1" />
+                    <x-input-error :messages="$errors->get('fiscal_year_id')" class="mt-1" />
                 </div>
 
                 <!-- Account/Sub-Account Selection -->
@@ -526,13 +558,13 @@ $(document).ready(function() {
             formElement.action = `/departments/{{ $department->id }}/expense-types/{{ $expenseType->id }}/allocations/${button.dataset.id}`;
 
             // Populate form with data attributes
-            const year = button.dataset.year;
+            const fiscalYearId = button.dataset.fiscalYearId;
             const accountType = button.dataset.accountType;
             const accountId = button.dataset.accountId;
             const subAccountId = button.dataset.subAccountId;
             
-            // Set year
-            document.getElementById('yearInput').value = year;
+            // Set fiscal year
+            document.getElementById('fiscalYearInput').value = fiscalYearId;
             
             // Set the dropdown value based on account type
             if (accountType === 'account' && accountId) {

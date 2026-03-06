@@ -17,6 +17,13 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ObligationRequestController;
 use App\Http\Controllers\ReviewStatusController;
 use App\Http\Controllers\Api\ObligationRequestApiController;
+use App\Http\Controllers\BudgetRealignmentController;
+use App\Http\Controllers\FiscalYearController;
+use App\Http\Controllers\StatementOfIndebtednessController;
+use App\Http\Controllers\StatementOfFundingSourceController;
+use App\Http\Controllers\StatementOfStatutoryObligationController;
+use App\Http\Controllers\SalaryScheduleController;
+use App\Http\Controllers\PlantillaController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -39,6 +46,80 @@ Route::prefix('api/obligation-requests')->middleware('auth')->group(function () 
     Route::get('fund-types/{fundType}/departments/{department}/expense-types', [ObligationRequestApiController::class, 'getExpenseTypesByDepartment']);
     Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts', [ObligationRequestApiController::class, 'getAccountsByExpenseType']);
     Route::get('fund-types/{fundType}/departments/{department}/expense-types/{expenseType}/accounts/{account}/sub-accounts', [ObligationRequestApiController::class, 'getSubAccountsByAccount']);
+});
+
+// Fallback API route for getting expense types by department (without fund type requirement)
+Route::get('api/departments/{department}/expense-types', [ObligationRequestApiController::class, 'getExpenseTypesByDepartmentOnly'])->middleware('auth');
+
+// Budget Realignments
+Route::resource('budget-realignments', BudgetRealignmentController::class)->middleware('auth');
+Route::post('budget-realignments/{budgetRealignment}/submit', [BudgetRealignmentController::class, 'submit'])->name('budget-realignments.submit')->middleware('auth');
+Route::post('budget-realignments/{budgetRealignment}/approve', [BudgetRealignmentController::class, 'approve'])->name('budget-realignments.approve')->middleware('auth');
+Route::get('api/budget-realignments/allocations', [BudgetRealignmentController::class, 'getAllocations'])->name('budget-realignments.allocations')->middleware('auth');
+Route::get('api/budget-realignments/allocation-info', [BudgetRealignmentController::class, 'getAllocationInfo'])->name('budget-realignments.allocation-info')->middleware('auth');
+
+// Fiscal Years
+Route::resource('fiscal-years', FiscalYearController::class)->middleware('auth');
+Route::post('fiscal-years/{fiscalYear}/set-current', [FiscalYearController::class, 'setCurrent'])->name('fiscal-years.set-current')->middleware('auth');
+Route::post('fiscal-years/generate', [FiscalYearController::class, 'generate'])->name('fiscal-years.generate')->middleware('auth');
+
+// Statements of Indebtedness
+Route::resource('statements-of-indebtedness', StatementOfIndebtednessController::class)
+    ->parameters(['statements-of-indebtedness' => 'statementOfIndebtedness'])
+    ->middleware('auth');
+Route::resource('statements-of-funding-sources', StatementOfFundingSourceController::class)
+    ->parameters(['statements-of-funding-sources' => 'statementOfFundingSource'])
+    ->middleware('auth');
+Route::get('statements-of-funding-sources/print/fiscal-year', [StatementOfFundingSourceController::class, 'printByFiscalYear'])
+    ->name('statements-of-funding-sources.print-fiscal-year')
+    ->middleware('auth');
+Route::get('statements-of-funding-sources/{statementOfFundingSource}/print', [StatementOfFundingSourceController::class, 'printView'])
+    ->name('statements-of-funding-sources.print')
+    ->middleware('auth');
+Route::resource('statements-of-statutory-obligations', StatementOfStatutoryObligationController::class)
+    ->parameters(['statements-of-statutory-obligations' => 'statementOfStatutoryObligation'])
+    ->middleware('auth');
+Route::get('statements-of-statutory-obligations/print/fiscal-year', [StatementOfStatutoryObligationController::class, 'printByFiscalYear'])
+    ->name('statements-of-statutory-obligations.print-fiscal-year')
+    ->middleware('auth');
+Route::get('statements-of-statutory-obligations/{statementOfStatutoryObligation}/print', [StatementOfStatutoryObligationController::class, 'printView'])
+    ->name('statements-of-statutory-obligations.print')
+    ->middleware('auth');
+Route::resource('salary-schedules', SalaryScheduleController::class)
+    ->parameters(['salary-schedules' => 'salarySchedule'])
+    ->middleware('auth');
+Route::get('salary-schedules/print/fiscal-year', [SalaryScheduleController::class, 'printByFiscalYear'])
+    ->name('salary-schedules.print-fiscal-year')
+    ->middleware('auth');
+Route::get('salary-schedules/{salarySchedule}/print', [SalaryScheduleController::class, 'printView'])
+    ->name('salary-schedules.print')
+    ->middleware('auth');
+Route::resource('plantillas', PlantillaController::class)->middleware('auth');
+Route::get('plantillas/print/fiscal-year', [PlantillaController::class, 'printByFiscalYear'])
+    ->name('plantillas.print-fiscal-year')
+    ->middleware('auth');
+Route::get('plantillas/{plantilla}/print', [PlantillaController::class, 'printView'])
+    ->name('plantillas.print')
+    ->middleware('auth');
+Route::get('statements-of-indebtedness/print/fiscal-year', [StatementOfIndebtednessController::class, 'printByFiscalYear'])
+    ->name('statements-of-indebtedness.print-fiscal-year')
+    ->middleware('auth');
+Route::get('statements-of-indebtedness/{statementOfIndebtedness}/print', [StatementOfIndebtednessController::class, 'printView'])
+    ->name('statements-of-indebtedness.print')
+    ->middleware('auth');
+
+// Public API routes for testing (remove in production)
+Route::prefix('api/public')->group(function () {
+    Route::get('departments', [DepartmentController::class, 'index']);
+    Route::get('accounts', [AccountController::class, 'index']);
+});
+
+// PDF Generation Routes
+Route::prefix('pdf')->middleware('auth')->group(function () {
+    Route::get('templates', [App\Http\Controllers\PdfController::class, 'templates']);
+    Route::get('preview/{template}', [App\Http\Controllers\PdfController::class, 'preview']);
+    Route::post('generate/{template}', [App\Http\Controllers\PdfController::class, 'generate']);
+    Route::post('custom', [App\Http\Controllers\PdfController::class, 'custom']);
 });
 
 // Review Status
@@ -144,3 +225,9 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+// Supplemental Budget Routes
+Route::resource('supplemental-budgets', App\Http\Controllers\SupplementalBudgetController::class)->middleware('auth');
+Route::post('supplemental-budgets/{supplementalBudget}/submit', [App\Http\Controllers\SupplementalBudgetController::class, 'submit'])->name('supplemental-budgets.submit')->middleware('auth');
+Route::post('supplemental-budgets/{supplementalBudget}/approve', [App\Http\Controllers\SupplementalBudgetController::class, 'approve'])->name('supplemental-budgets.approve')->middleware('auth');
+Route::post('supplemental-budgets/{supplementalBudget}/reject', [App\Http\Controllers\SupplementalBudgetController::class, 'reject'])->name('supplemental-budgets.reject')->middleware('auth');
+Route::get('api/sub-accounts', [App\Http\Controllers\SupplementalBudgetController::class, 'getSubAccounts'])->name('api.sub-accounts')->middleware('auth');

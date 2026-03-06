@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\FiscalYear;
 
 class ManagementController extends Controller
 {
@@ -145,6 +146,33 @@ class ManagementController extends Controller
                 'route' => 'review-statuses.index',
                 'color' => 'violet',
                 'count' => \App\Models\ReviewStatus::count(),
+                'permission' => 'manage_departments'
+            ],
+            [
+                'label' => 'Fiscal Years',
+                'description' => 'Manage fiscal years for budget planning and tracking',
+                'icon' => 'calendar',
+                'route' => 'fiscal-years.index',
+                'color' => 'red',
+                'count' => \App\Models\FiscalYear::count(),
+                'permission' => 'manage_departments'
+            ],
+            [
+                'label' => 'Salary Schedules',
+                'description' => 'Manage salary grade and step schedules in grid format',
+                'icon' => 'document-text',
+                'route' => 'salary-schedules.index',
+                'color' => 'gray',
+                'count' => \App\Models\SalarySchedule::count(),
+                'permission' => 'manage_departments'
+            ],
+            [
+                'label' => 'Plantilla',
+                'description' => 'Manage plantilla groups with employee salary from/to computations',
+                'icon' => 'users',
+                'route' => 'plantillas.index',
+                'color' => 'stone',
+                'count' => \App\Models\Plantilla::count(),
                 'permission' => 'manage_departments'
             ]
         ];

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\DepartmentExpenseTypeAllocationRepository;
 use App\Models\Account;
 use App\Models\SubAccount;
+use App\Models\FiscalYear;
 
 class DepartmentExpenseTypeAllocationService
 {
@@ -15,9 +16,9 @@ class DepartmentExpenseTypeAllocationService
         $this->repo = $repo;
     }
 
-    public function getAllocations($departmentId, $expenseTypeId)
+    public function getAllocations($departmentId, $expenseTypeId, $fiscalYearId = null)
     {
-        return $this->repo->getAllByDepartmentAndExpenseType($departmentId, $expenseTypeId);
+        return $this->repo->getAllByDepartmentAndExpenseType($departmentId, $expenseTypeId, $fiscalYearId);
     }
 
     public function getAllocation($departmentId, $expenseTypeId, $allocationId)
@@ -43,6 +44,9 @@ class DepartmentExpenseTypeAllocationService
             }
         }
 
+        // Get fiscal year
+        $fiscalYear = FiscalYear::findOrFail($data['fiscal_year_id']);
+
         // Check for duplicate allocation
         $accountId = $data['account_type'] === 'account' ? $data['account_id'] : null;
         $subAccountId = $data['account_type'] === 'sub_account' ? $data['sub_account_id'] : null;
@@ -50,20 +54,20 @@ class DepartmentExpenseTypeAllocationService
         $existingAllocation = $this->repo->checkDuplicateAllocation(
             $departmentId,
             $expenseTypeId,
-            $data['year'],
+            $data['fiscal_year_id'],
             $accountId,
             $subAccountId
         );
 
         if ($existingAllocation) {
-            throw new \Exception('An allocation for this account and year already exists. Please edit the existing allocation instead.');
+            throw new \Exception('An allocation for this account and fiscal year already exists. Please edit the existing allocation instead.');
         }
 
         // Create allocation
         return $this->repo->create([
             'department_id' => $departmentId,
             'expense_type_id' => $expenseTypeId,
-            'year' => $data['year'],
+            'fiscal_year_id' => $data['fiscal_year_id'],
             'account_id' => $accountId,
             'sub_account_id' => $subAccountId,
             'amount' => $data['amount'],
@@ -81,6 +85,9 @@ class DepartmentExpenseTypeAllocationService
             }
         }
 
+        // Get fiscal year
+        $fiscalYear = FiscalYear::findOrFail($data['fiscal_year_id']);
+
         // Check for duplicate allocation (excluding current)
         $accountId = $data['account_type'] === 'account' ? $data['account_id'] : null;
         $subAccountId = $data['account_type'] === 'sub_account' ? $data['sub_account_id'] : null;
@@ -88,19 +95,19 @@ class DepartmentExpenseTypeAllocationService
         $existingAllocation = $this->repo->checkDuplicateAllocation(
             $departmentId,
             $expenseTypeId,
-            $data['year'],
+            $data['fiscal_year_id'],
             $accountId,
             $subAccountId,
             $allocationId
         );
 
         if ($existingAllocation) {
-            throw new \Exception('An allocation for this account and year already exists.');
+            throw new \Exception('An allocation for this account and fiscal year already exists.');
         }
 
         // Update allocation
         return $this->repo->update($allocationId, [
-            'year' => $data['year'],
+            'fiscal_year_id' => $data['fiscal_year_id'],
             'account_id' => $accountId,
             'sub_account_id' => $subAccountId,
             'amount' => $data['amount'],

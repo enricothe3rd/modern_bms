@@ -15,4 +15,9 @@ class ExpenseType extends Model
     {
         return $this->belongsToMany(Department::class);
     }
+
+    public function departmentExpenseTypeAllocations()
+    {
+        return $this->hasMany(DepartmentExpenseTypeAllocation::class);
+    }
 }

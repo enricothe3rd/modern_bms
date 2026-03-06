@@ -6,6 +6,8 @@ use App\Models\Department;
 use App\Models\ExpenseType;
 use App\Models\Account;
 use App\Models\SubAccount;
+use App\Models\FiscalYear;
+use App\Models\DepartmentExpenseTypeAllocation;
 use App\Http\Requests\DepartmentExpenseTypeAllocationRequest;
 use App\Services\DepartmentExpenseTypeAllocationService;
 use Illuminate\Http\Request;
@@ -24,7 +26,12 @@ class DepartmentExpenseTypeAllocationController extends Controller
         $department = Department::with('sector')->findOrFail($departmentId);
         $expenseType = ExpenseType::findOrFail($expenseTypeId);
         
-        $allocations = $this->service->getAllocations($departmentId, $expenseTypeId);
+        // Get current fiscal year or allow selection
+        $currentFiscalYear = FiscalYear::current();
+        $fiscalYears = FiscalYear::active()->get();
+        $selectedFiscalYear = request('fiscal_year_id') ? FiscalYear::find(request('fiscal_year_id')) : $currentFiscalYear;
+        
+        $allocations = $this->service->getAllocations($departmentId, $expenseTypeId, $selectedFiscalYear?->id);
 
         // Load accounts with their sub-accounts for hierarchical display
         $accounts = Account::with('subAccounts')->orderBy('code')->get();
@@ -35,7 +42,10 @@ class DepartmentExpenseTypeAllocationController extends Controller
             'expenseType', 
             'allocations', 
             'accounts', 
-            'subAccounts'
+            'subAccounts',
+            'fiscalYears',
+            'selectedFiscalYear',
+            'currentFiscalYear'
         ));
     }
 

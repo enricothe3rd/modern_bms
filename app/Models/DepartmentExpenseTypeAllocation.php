@@ -12,7 +12,7 @@ class DepartmentExpenseTypeAllocation extends Model
     protected $fillable = [
         'department_id',
         'expense_type_id',
-        'year',
+        'fiscal_year_id',
         'account_id',
         'sub_account_id',
         'amount',
@@ -31,6 +31,11 @@ class DepartmentExpenseTypeAllocation extends Model
     public function expenseType()
     {
         return $this->belongsTo(ExpenseType::class);
+    }
+
+    public function fiscalYear()
+    {
+        return $this->belongsTo(FiscalYear::class);
     }
 
     public function account()
@@ -77,5 +82,35 @@ class DepartmentExpenseTypeAllocation extends Model
         }
         
         return $this->subAccount->account_id !== $selectedAccountId;
+    }
+
+    public function getObligatedAmount($fiscalYearId = null)
+    {
+        $fiscalYearId = $fiscalYearId ?? $this->fiscal_year_id;
+        
+        if (!$fiscalYearId) {
+            return 0;
+        }
+        
+        return \App\Models\ObligationRequestItem::whereHas('obligationRequest', function($query) use ($fiscalYearId) {
+                $query->whereHas('fiscalYear', function($subQuery) use ($fiscalYearId) {
+                    $subQuery->where('id', $fiscalYearId);
+                });
+            })
+            ->where('department_id', $this->department_id)
+            ->where('expense_type_id', $this->expense_type_id)
+            ->where(function($query) {
+                if ($this->account_id) {
+                    $query->where('account_id', $this->account_id);
+                } elseif ($this->sub_account_id) {
+                    $query->where('sub_account_id', $this->sub_account_id);
+                }
+            })
+            ->sum('amount') ?? 0;
+    }
+
+    public function getAvailableAmount($fiscalYearId = null)
+    {
+        return $this->amount - $this->getObligatedAmount($fiscalYearId);
     }
 }

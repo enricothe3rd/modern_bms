@@ -28,6 +28,31 @@ return [
             'route' => 'obligation-requests.index',
         ],
         [
+            'label' => 'Supplemental Budgets',
+            'icon' => 'currency-dollar',
+            'route' => 'supplemental-budgets.index',
+        ],
+        [
+            'label' => 'Budget Realignments',
+            'icon' => 'arrows-right-left',
+            'route' => 'budget-realignments.index',
+        ],
+        [
+            'label' => 'Statements of Indebtedness',
+            'icon' => 'document-text',
+            'route' => 'statements-of-indebtedness.index',
+        ],
+        [
+            'label' => 'Funding Sources',
+            'icon' => 'document-text',
+            'route' => 'statements-of-funding-sources.index',
+        ],
+        [
+            'label' => 'Statutory Obligations',
+            'icon' => 'document-text',
+            'route' => 'statements-of-statutory-obligations.index',
+        ],
+        [
             'label' => 'Management',
             'icon' => 'cog-6-tooth',
             'route' => 'management.index',
